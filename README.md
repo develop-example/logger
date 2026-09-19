@@ -2,19 +2,24 @@
 
 This project is the standalone example used to build the logger incrementally.
 
-## Stage 0
+## Stage 1
 
-Stage 0 establishes the build and test skeleton only:
+Stage 1 adds a synchronous, dependency-free logger on top of the stage 0
+build skeleton:
 
 - C++17 static library target: `logger`
 - public include directory: `include/logger/`
 - executable smoke example: `logger_example`
 - dependency-free test executable: `logger_test`
 - install rules for the library and public headers
+- five log levels with a global threshold
+- `printf` and `stringstream` logging interfaces
+- structured `LogRecord` metadata
+- thread-safe console output through `std::clog`
+- configurable output stream for embedding and tests
 
-The library currently exposes only `logger::version()`. Actual logging,
-macros, asynchronous processing, configuration, and backends are intentionally
-left for later stages.
+Macros, asynchronous processing, configuration, and third-party backends are
+intentionally left for later stages.
 
 ## Build
 
