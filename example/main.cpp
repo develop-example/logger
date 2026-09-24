@@ -1,29 +1,23 @@
-#include <iostream>
-#include <sstream>
-
+#include "logger/logger_motion.h"
+#include "logger/logger_vision.h"
 #include "logger/logger.h"
 
 int main()
 {
-    auto* logger = logger::ILogger::getInstance();
+    auto* log = logger::ILogger::getInstance();
+    log->setLogLevel(logger::ELogLevel::kDebug);
 
-    std::cout << "logger example, version " << logger::version() << '\n';
+    LOGGER_DEBUG("logger example, version %s", logger::version());
+    LOGGER_INFO("general logger macro");
+    LOGGER_WARN_NAMED("Example", "named logger macro, value=%d", 42);
+    LOGGER_INFO_STREAM("stream value=" << 3.14);
+    MOTION_LOG_INFO("motion module started");
+    MOTION_LOG_WARN_STREAM("target speed=" << 0.5);
+    VISION_LOG_ERROR("camera initialization failed: %s", "not connected");
 
-    logger->setLogLevel(logger::ELogLevel::kDebug);
-    logger->print(logger::ELogLevel::kDebug, "Example", __FILE__, __LINE__, __func__,
-                  "debug value=%d", 42);
-    logger->print(logger::ELogLevel::kInfo, "Example", __FILE__, __LINE__, __func__,
-                  "an informational message");
-
-    std::stringstream stream;
-    stream << "stream value=" << 3.14;
-    logger->print(logger::ELogLevel::kWarn, "Example", __FILE__, __LINE__, __func__, stream);
-
-    logger->setLogLevel(logger::ELogLevel::kWarn);
-    logger->print(logger::ELogLevel::kInfo, "Example", __FILE__, __LINE__, __func__,
-                  "this message is filtered");
-    logger->print(logger::ELogLevel::kError, "Example", __FILE__, __LINE__, __func__,
-                  "error messages are still visible");
-    logger->flush();
+    log->setLogLevel(logger::ELogLevel::kWarn);
+    LOGGER_INFO("this message is filtered");
+    LOGGER_ERROR("error messages are still visible");
+    log->flush();
     return 0;
 }

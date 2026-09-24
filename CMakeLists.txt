@@ -1,11 +1,34 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(logger_example VERSION 0.2.0 LANGUAGES CXX)
+project(logger_example VERSION 0.3.0 LANGUAGES CXX)
 
 include(CTest)
 include(GNUInstallDirs)
 
 option(LOGGER_BUILD_TESTS "Build logger tests" ON)
+
+include(cmake/LoggerGenerator.cmake)
+
+set(LOGGER_GENERATED_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/include")
+set(LOGGER_GENERATED_MODULE_HEADERS)
+
+logger_module(
+    MODULE MOTION
+    MODULE_NAME Motion
+    OUTPUT_FILE "${LOGGER_GENERATED_INCLUDE_DIR}/logger/logger_motion.h"
+)
+list(APPEND LOGGER_GENERATED_MODULE_HEADERS
+    "${LOGGER_GENERATED_INCLUDE_DIR}/logger/logger_motion.h"
+)
+
+logger_module(
+    MODULE VISION
+    MODULE_NAME Vision
+    OUTPUT_FILE "${LOGGER_GENERATED_INCLUDE_DIR}/logger/logger_vision.h"
+)
+list(APPEND LOGGER_GENERATED_MODULE_HEADERS
+    "${LOGGER_GENERATED_INCLUDE_DIR}/logger/logger_vision.h"
+)
 
 add_library(logger STATIC
     src/logger.cpp
@@ -18,6 +41,7 @@ target_compile_features(logger PUBLIC cxx_std_17)
 target_include_directories(logger
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<BUILD_INTERFACE:${LOGGER_GENERATED_INCLUDE_DIR}>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
@@ -48,6 +72,9 @@ install(TARGETS logger
 )
 
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(FILES ${LOGGER_GENERATED_MODULE_HEADERS}
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/logger
+)
 
 install(EXPORT loggerTargets
     FILE loggerTargets.cmake

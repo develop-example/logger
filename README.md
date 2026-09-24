@@ -2,10 +2,10 @@
 
 This project is the standalone example used to build the logger incrementally.
 
-## Stage 1
+## Stage 2
 
-Stage 1 adds a synchronous, dependency-free logger on top of the stage 0
-build skeleton:
+Stage 2 adds the public logging macros and generated module wrappers on top of
+the synchronous, dependency-free logger:
 
 - C++17 static library target: `logger`
 - public include directory: `include/logger/`
@@ -17,9 +17,14 @@ build skeleton:
 - structured `LogRecord` metadata
 - thread-safe console output through `std::clog`
 - configurable output stream for embedding and tests
+- `LOGGER_DEBUG/INFO/WARN/ERROR/FATAL` macros
+- named and stream-style macro variants
+- generated `MODULE_LOG_*` wrappers for Motion and Vision
+- source file, line, and function metadata captured automatically by macros
+- filtered stream expressions are not evaluated
 
-Macros, asynchronous processing, configuration, and third-party backends are
-intentionally left for later stages.
+Once/throttle macros, asynchronous processing, configuration, and third-party
+backends are intentionally left for later stages.
 
 ## Build
 

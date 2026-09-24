@@ -4,14 +4,15 @@
 #include <thread>
 #include <vector>
 
+#include "logger/logger_motion.h"
 #include "logger/logger.h"
 
 int main()
 {
     assert(logger::version() != nullptr);
-    assert(std::string(logger::version()) == "0.2.0");
+    assert(std::string(logger::version()) == "0.3.0");
     assert(logger::kVersionMajor == 0);
-    assert(logger::kVersionMinor == 2);
+    assert(logger::kVersionMinor == 3);
     assert(logger::kVersionPatch == 0);
 
     auto* logger = logger::ILogger::getInstance();
@@ -41,6 +42,39 @@ int main()
     stream << "stream value=" << 12;
     logger->print(logger::ELogLevel::kWarn, "Test", "test.cpp", 12, "main", stream);
     assert(output.str().find("stream value=12") != std::string::npos);
+
+    output.str("");
+    output.clear();
+    logger->setLogLevel(logger::ELogLevel::kDebug);
+    LOGGER_DEBUG("debug %d", 1);
+    LOGGER_INFO_NAMED("Named", "info %s", "message");
+    LOGGER_WARN_STREAM_NAMED("NamedStream", "value=" << 9);
+    MOTION_LOG_INFO("module %d", 2);
+    MOTION_LOG_ERROR_STREAM("error code=" << 17);
+    const std::string macro_output = output.str();
+    assert(macro_output.find("[DEBUG]") != std::string::npos);
+    assert(macro_output.find("[Named]") != std::string::npos);
+    assert(macro_output.find("[NamedStream]") != std::string::npos);
+    assert(macro_output.find("[Motion]") != std::string::npos);
+    assert(macro_output.find("module 2") != std::string::npos);
+    assert(macro_output.find("error code=17") != std::string::npos);
+    assert(macro_output.find("test_logger.cpp:") != std::string::npos);
+    assert(macro_output.find("main()") != std::string::npos);
+
+    int stream_evaluations = 0;
+    logger->setLogLevel(logger::ELogLevel::kInfo);
+    LOGGER_DEBUG_STREAM(++stream_evaluations);
+    MOTION_LOG_DEBUG_STREAM(++stream_evaluations);
+    assert(stream_evaluations == 0);
+    LOGGER_INFO_STREAM(++stream_evaluations);
+    assert(stream_evaluations == 1);
+
+    bool else_branch = false;
+    if (false)
+        LOGGER_INFO("unreachable");
+    else
+        else_branch = true;
+    assert(else_branch);
 
     logger->setLogLevel(logger::ELogLevel::kFatal);
     output.str("");

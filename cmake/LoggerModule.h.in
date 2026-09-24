@@ -1,0 +1,20 @@
+#pragma once
+
+#include "logger/logger.h"
+
+#define @module_prefix@_LOG_DEBUG(...) LOGGER_DEBUG_NAMED("@module_name@", __VA_ARGS__)
+#define @module_prefix@_LOG_INFO(...) LOGGER_INFO_NAMED("@module_name@", __VA_ARGS__)
+#define @module_prefix@_LOG_WARN(...) LOGGER_WARN_NAMED("@module_name@", __VA_ARGS__)
+#define @module_prefix@_LOG_ERROR(...) LOGGER_ERROR_NAMED("@module_name@", __VA_ARGS__)
+#define @module_prefix@_LOG_FATAL(...) LOGGER_FATAL_NAMED("@module_name@", __VA_ARGS__)
+
+#define @module_prefix@_LOG_DEBUG_STREAM(expression) \
+    LOGGER_DEBUG_STREAM_NAMED("@module_name@", expression)
+#define @module_prefix@_LOG_INFO_STREAM(expression) \
+    LOGGER_INFO_STREAM_NAMED("@module_name@", expression)
+#define @module_prefix@_LOG_WARN_STREAM(expression) \
+    LOGGER_WARN_STREAM_NAMED("@module_name@", expression)
+#define @module_prefix@_LOG_ERROR_STREAM(expression) \
+    LOGGER_ERROR_STREAM_NAMED("@module_name@", expression)
+#define @module_prefix@_LOG_FATAL_STREAM(expression) \
+    LOGGER_FATAL_STREAM_NAMED("@module_name@", expression)
