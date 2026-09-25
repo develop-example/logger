@@ -1,4 +1,6 @@
 #include <cassert>
+#include <cstdio>
+#include <fstream>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -10,9 +12,9 @@
 int main()
 {
     assert(logger::version() != nullptr);
-    assert(std::string(logger::version()) == "0.3.0");
+    assert(std::string(logger::version()) == "0.4.0");
     assert(logger::kVersionMajor == 0);
-    assert(logger::kVersionMinor == 3);
+    assert(logger::kVersionMinor == 4);
     assert(logger::kVersionPatch == 0);
 
     auto* logger = logger::ILogger::getInstance();
@@ -114,6 +116,54 @@ int main()
         ++position;
     }
     assert(line_count == kThreadCount * kMessagesPerThread);
+
+    const std::string config_path = "stage3_test_logger.properties";
+    {
+        std::ofstream config(config_path);
+        assert(config);
+        config << "# comments and whitespace are supported\n"
+               << "logger.level = WARN\n"
+               << "logger.Motion.level = debug\n"
+               << "logger.Motion.Controller.level=ERROR\n"
+               << "logger.Vision.level=FATAL\n";
+    }
+
+    assert(logger->loadConfig(config_path));
+    assert(logger->getConfigPath() == config_path);
+    assert(logger->getLogLevel() == logger::ELogLevel::kWarn);
+    assert(logger->getLogLevel("Motion") == logger::ELogLevel::kDebug);
+    assert(logger->getLogLevel("Motion.Controller.Sensor") == logger::ELogLevel::kError);
+    assert(logger->getLogLevel("Motion.Other") == logger::ELogLevel::kDebug);
+    assert(logger->getLogLevel("Unknown") == logger::ELogLevel::kWarn);
+    assert(logger->shouldLog("Motion", logger::ELogLevel::kDebug));
+    assert(!logger->shouldLog("Vision", logger::ELogLevel::kError));
+    assert(logger->shouldLog("Vision", logger::ELogLevel::kFatal));
+
+    logger->setLogLevel("Motion", logger::ELogLevel::kFatal);
+    assert(logger->getLogLevel("Motion") == logger::ELogLevel::kFatal);
+    logger->setLogLevel("Motion", logger::ELogLevel::kDebug);
+
+    {
+        std::ofstream invalid(config_path);
+        assert(invalid);
+        invalid << "logger.level=not-a-level\n";
+    }
+    assert(!logger->reloadConfig());
+    assert(logger->getLogLevel() == logger::ELogLevel::kWarn);
+    assert(logger->getLogLevel("Motion") == logger::ELogLevel::kDebug);
+
+    {
+        std::ofstream invalid(config_path);
+        assert(invalid);
+        invalid << "logger.unknown.property=INFO\n";
+    }
+    assert(!logger->reloadConfig());
+    assert(logger->getLogLevel() == logger::ELogLevel::kWarn);
+
+    std::remove(config_path.c_str());
+    assert(!logger->loadConfig("missing-stage3-config.properties"));
+    assert(logger->getConfigPath() == config_path);
+    assert(logger->getLogLevel() == logger::ELogLevel::kWarn);
 
     logger->resetOutput();
     logger->setLogLevel(logger::ELogLevel::kDebug);

@@ -2,10 +2,10 @@
 
 This project is the standalone example used to build the logger incrementally.
 
-## Stage 2
+## Stage 3
 
-Stage 2 adds the public logging macros and generated module wrappers on top of
-the synchronous, dependency-free logger:
+Stage 3 adds properties-based configuration and module-level filtering on top
+of the synchronous, dependency-free logger and public macros:
 
 - C++17 static library target: `logger`
 - public include directory: `include/logger/`
@@ -22,9 +22,25 @@ the synchronous, dependency-free logger:
 - generated `MODULE_LOG_*` wrappers for Motion and Vision
 - source file, line, and function metadata captured automatically by macros
 - filtered stream expressions are not evaluated
+- root and module-specific log levels from `config/logger.properties`
+- nearest-parent module level resolution
+- runtime configuration loading and reloading
+- `LOGGER_CONFIG_FILE` environment variable support
 
-Once/throttle macros, asynchronous processing, configuration, and third-party
+Once/throttle macros, asynchronous processing, file output, and third-party
 backends are intentionally left for later stages.
+
+The configuration format is intentionally small:
+
+```properties
+logger.level=INFO
+logger.Motion.level=DEBUG
+logger.Vision.level=WARN
+```
+
+Use `loadConfig(path)` to load a file explicitly. A failed load leaves the
+currently active configuration unchanged. `reloadConfig()` reparses the last
+successfully loaded path.
 
 ## Build
 

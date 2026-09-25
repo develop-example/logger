@@ -1,4 +1,5 @@
 #include "logger/logger.h"
+#include "config.h"
 
 #include <cstdarg>
 #include <cstdio>
@@ -8,6 +9,7 @@
 #include <mutex>
 #include <sstream>
 #include <utility>
+#include <cstdlib>
 
 namespace logger
 {
@@ -18,11 +20,20 @@ namespace
 class Logger final : public ILogger
 {
 public:
+    Logger()
+    {
+        const char* environment_path = std::getenv("LOGGER_CONFIG_FILE");
+        if (environment_path != nullptr && *environment_path != '\0')
+        {
+            loadConfig(environment_path);
+        }
+    }
+
     void print(ELogLevel level, const char* name, const char* file,
                std::uint32_t line, const char* function,
                const char* format, ...) override
     {
-        if (format == nullptr || !shouldLog(level))
+        if (format == nullptr || !shouldLog(name, level))
         {
             return;
         }
@@ -55,7 +66,7 @@ public:
                std::uint32_t line, const char* function,
                const std::stringstream& stream) override
     {
-        if (!shouldLog(level))
+        if (!shouldLog(name, level))
         {
             return;
         }
@@ -66,19 +77,75 @@ public:
     void setLogLevel(ELogLevel level) noexcept override
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        level_ = level;
+        config_.root_level = level;
+    }
+
+    void setLogLevel(const std::string& name, ELogLevel level) noexcept override
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (name.empty())
+        {
+            config_.root_level = level;
+        }
+        else
+        {
+            config_.module_levels[name] = level;
+        }
     }
 
     ELogLevel getLogLevel() const noexcept override
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        return level_;
+        return config_.root_level;
+    }
+
+    ELogLevel getLogLevel(const std::string& name) const noexcept override
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return resolveLevelUnlocked(name);
     }
 
     bool shouldLog(ELogLevel level) const noexcept override
     {
+        return shouldLog(nullptr, level);
+    }
+
+    bool shouldLog(const char* name, ELogLevel level) const noexcept override
+    {
         std::lock_guard<std::mutex> lock(mutex_);
-        return static_cast<unsigned>(level) >= static_cast<unsigned>(level_);
+        return static_cast<unsigned>(level) >=
+               static_cast<unsigned>(resolveLevelUnlocked(name != nullptr ? name : ""));
+    }
+
+    bool loadConfig(const std::string& path) override
+    {
+        detail::LoggerConfig parsed;
+        std::string error;
+        if (!detail::parseConfigFile(path, parsed, error))
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            std::cerr << "logger: failed to load config '" << path << "': " << error << '\n';
+            return false;
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            config_ = std::move(parsed);
+            config_path_ = path;
+        }
+        return true;
+    }
+
+    bool reloadConfig() override
+    {
+        const std::string path = getConfigPath();
+        return !path.empty() && loadConfig(path);
+    }
+
+    std::string getConfigPath() const override
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return config_path_;
     }
 
     void setOutput(std::ostream& output) noexcept override
@@ -146,7 +213,8 @@ private:
 
         // Re-check the threshold after formatting in case it changed while
         // this call was preparing its record.
-        if (static_cast<unsigned>(record.level) < static_cast<unsigned>(level_))
+        if (static_cast<unsigned>(record.level) <
+            static_cast<unsigned>(resolveLevelUnlocked(record.name)))
         {
             return;
         }
@@ -170,7 +238,29 @@ private:
     }
 
     mutable std::mutex mutex_;
-    ELogLevel level_{ELogLevel::kDebug};
+    ELogLevel resolveLevelUnlocked(const std::string& name) const noexcept
+    {
+        std::string candidate = name;
+        while (!candidate.empty())
+        {
+            const auto found = config_.module_levels.find(candidate);
+            if (found != config_.module_levels.end())
+            {
+                return found->second;
+            }
+
+            const auto separator = candidate.rfind('.');
+            if (separator == std::string::npos)
+            {
+                break;
+            }
+            candidate.erase(separator);
+        }
+        return config_.root_level;
+    }
+
+    detail::LoggerConfig config_;
+    std::string config_path_;
     std::ostream* output_{&std::clog};
 };
 
@@ -202,7 +292,7 @@ const char* toString(ELogLevel level) noexcept
 
 const char* version() noexcept
 {
-    return "0.3.0";
+    return "0.4.0";
 }
 
 }  // namespace logger

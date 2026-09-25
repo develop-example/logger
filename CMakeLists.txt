@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(logger_example VERSION 0.3.0 LANGUAGES CXX)
+project(logger_example VERSION 0.4.0 LANGUAGES CXX)
 
 include(CTest)
 include(GNUInstallDirs)
@@ -31,6 +31,7 @@ list(APPEND LOGGER_GENERATED_MODULE_HEADERS
 )
 
 add_library(logger STATIC
+    src/config.cpp
     src/logger.cpp
 )
 
@@ -74,6 +75,9 @@ install(TARGETS logger
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(FILES ${LOGGER_GENERATED_MODULE_HEADERS}
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/logger
+)
+install(FILES config/logger.properties
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/logger
 )
 
 install(EXPORT loggerTargets

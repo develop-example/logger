@@ -12,7 +12,8 @@
     do                                                                                         \
     {                                                                                          \
         auto* logger_detail_instance = ::logger::ILogger::getInstance();                       \
-        if (logger_detail_instance->shouldLog(level))                                          \
+        const char* logger_detail_name = name;                                                 \
+        if (logger_detail_instance->shouldLog(logger_detail_name, level))                      \
         {                                                                                      \
             logger_detail_instance->print(level, name, __FILE__, __LINE__,                     \
                                           LOGGER_DETAIL_FUNCTION, __VA_ARGS__);                 \
@@ -23,7 +24,8 @@
     do                                                                                         \
     {                                                                                          \
         auto* logger_detail_instance = ::logger::ILogger::getInstance();                       \
-        if (logger_detail_instance->shouldLog(level))                                          \
+        const char* logger_detail_name = name;                                                 \
+        if (logger_detail_instance->shouldLog(logger_detail_name, level))                      \
         {                                                                                      \
             std::stringstream logger_detail_stream;                                            \
             logger_detail_stream << expression;                                                \

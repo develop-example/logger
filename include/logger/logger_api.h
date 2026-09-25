@@ -11,7 +11,7 @@ namespace logger
 {
 
 inline constexpr int kVersionMajor = 0;
-inline constexpr int kVersionMinor = 3;
+inline constexpr int kVersionMinor = 4;
 inline constexpr int kVersionPatch = 0;
 
 enum class ELogLevel : std::uint8_t
@@ -53,8 +53,16 @@ public:
                        const std::stringstream& stream) = 0;
 
     virtual void setLogLevel(ELogLevel level) noexcept = 0;
+    virtual void setLogLevel(const std::string& name, ELogLevel level) noexcept = 0;
     virtual ELogLevel getLogLevel() const noexcept = 0;
+    virtual ELogLevel getLogLevel(const std::string& name) const noexcept = 0;
     virtual bool shouldLog(ELogLevel level) const noexcept = 0;
+    virtual bool shouldLog(const char* name, ELogLevel level) const noexcept = 0;
+
+    // A failed load leaves the currently active configuration unchanged.
+    virtual bool loadConfig(const std::string& path) = 0;
+    virtual bool reloadConfig() = 0;
+    virtual std::string getConfigPath() const = 0;
 
     // The caller must keep a custom stream alive while it is selected.
     virtual void setOutput(std::ostream& output) noexcept = 0;

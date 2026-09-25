@@ -5,7 +5,10 @@
 int main()
 {
     auto* log = logger::ILogger::getInstance();
-    log->setLogLevel(logger::ELogLevel::kDebug);
+    if (!log->loadConfig("config/logger.properties"))
+    {
+        return 1;
+    }
 
     LOGGER_DEBUG("logger example, version %s", logger::version());
     LOGGER_INFO("general logger macro");
@@ -15,6 +18,9 @@ int main()
     MOTION_LOG_WARN_STREAM("target speed=" << 0.5);
     VISION_LOG_ERROR("camera initialization failed: %s", "not connected");
 
+    log->setLogLevel("Motion", logger::ELogLevel::kError);
+    MOTION_LOG_INFO("this module message is filtered after runtime override");
+    MOTION_LOG_ERROR("this module error remains visible");
     log->setLogLevel(logger::ELogLevel::kWarn);
     LOGGER_INFO("this message is filtered");
     LOGGER_ERROR("error messages are still visible");
