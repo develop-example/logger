@@ -12,7 +12,7 @@ namespace logger
 {
 
 inline constexpr int kVersionMajor = 0;
-inline constexpr int kVersionMinor = 5;
+inline constexpr int kVersionMinor = 6;
 inline constexpr int kVersionPatch = 0;
 
 enum class ELogLevel : std::uint8_t
@@ -42,6 +42,7 @@ struct QueueStats
     std::uint64_t dropped{0};
     std::uint64_t dropped_debug{0};
     std::uint64_t dropped_info{0};
+    std::uint64_t sink_errors{0};
 };
 
 struct LogRecord

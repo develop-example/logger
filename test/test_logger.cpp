@@ -1,7 +1,11 @@
 #include <cassert>
+#include <chrono>
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
+#include <stdexcept>
 #include <sstream>
+#include <streambuf>
 #include <string>
 #include <thread>
 #include <vector>
@@ -34,14 +38,28 @@ protected:
     }
 };
 
+class FailingStreamBuffer final : public std::streambuf
+{
+protected:
+    std::streamsize xsputn(const char*, std::streamsize) override
+    {
+        throw std::runtime_error("intentional sink failure");
+    }
+
+    int overflow(int) override
+    {
+        throw std::runtime_error("intentional sink failure");
+    }
+};
+
 }  // namespace
 
 int main()
 {
     assert(logger::version() != nullptr);
-    assert(std::string(logger::version()) == "0.5.0");
+    assert(std::string(logger::version()) == "0.6.0");
     assert(logger::kVersionMajor == 0);
-    assert(logger::kVersionMinor == 5);
+    assert(logger::kVersionMinor == 6);
     assert(logger::kVersionPatch == 0);
 
     auto* logger = logger::ILogger::getInstance();
@@ -199,6 +217,75 @@ int main()
     assert(!logger->loadConfig("missing-stage3-config.properties"));
     assert(logger->getConfigPath() == config_path);
     assert(logger->getLogLevel() == logger::ELogLevel::kWarn);
+
+    const std::filesystem::path sink_directory = "stage5-output";
+    const std::filesystem::path sink_path = sink_directory / "logger.log";
+    const std::string sink_config_path = "stage5-sinks.properties";
+    {
+        std::ofstream config(sink_config_path);
+        assert(config);
+        config << "logger.level=DEBUG\n"
+               << "logger.sinks=file\n"
+               << "logger.file.path=" << sink_path.string() << "\n"
+               << "logger.file.append=false\n";
+    }
+    std::filesystem::remove_all(sink_directory);
+    assert(logger->loadConfig(sink_config_path));
+    logger->resetOutput();
+    LOGGER_INFO("file sink message");
+    logger->flush();
+    assert(std::filesystem::exists(sink_path));
+    std::ifstream first_file(sink_path);
+    const std::string first_contents((std::istreambuf_iterator<char>(first_file)),
+                                     std::istreambuf_iterator<char>());
+    assert(first_contents.find("file sink message") != std::string::npos);
+
+    {
+        std::ofstream config(sink_config_path);
+        assert(config);
+        config << "logger.level=DEBUG\n"
+               << "logger.sinks=console,file\n"
+               << "logger.file.path=" << sink_path.string() << "\n"
+               << "logger.file.append=true\n";
+    }
+    assert(logger->reloadConfig());
+    LOGGER_WARN("appended sink message");
+    logger->flush();
+    std::ifstream second_file(sink_path);
+    const std::string second_contents((std::istreambuf_iterator<char>(second_file)),
+                                      std::istreambuf_iterator<char>());
+    assert(second_contents.size() > first_contents.size());
+    assert(second_contents.find("appended sink message") != std::string::npos);
+
+    {
+        std::ofstream invalid(sink_config_path);
+        assert(invalid);
+        invalid << "logger.level=DEBUG\n"
+                << "logger.sinks=file\n"
+                << "logger.file.path=/dev/null/logger.log\n";
+    }
+    assert(!logger->reloadConfig());
+    assert(logger->getConfigPath() == sink_config_path);
+    LOGGER_ERROR("old sink remains active");
+    logger->flush();
+    std::ifstream preserved_file(sink_path);
+    const std::string preserved_contents((std::istreambuf_iterator<char>(preserved_file)),
+                                         std::istreambuf_iterator<char>());
+    assert(preserved_contents.find("old sink remains active") != std::string::npos);
+
+    FailingStreamBuffer failing_buffer;
+    std::ostream failing_output(&failing_buffer);
+    failing_output.exceptions(std::ios::badbit);
+    logger->setOutput(failing_output);
+    const logger::QueueStats before_sink_error = logger->getQueueStats();
+    LOGGER_ERROR("sink failure must not stop worker");
+    logger->flush();
+    const logger::QueueStats after_sink_error = logger->getQueueStats();
+    assert(after_sink_error.sink_errors > before_sink_error.sink_errors);
+    logger->resetOutput();
+
+    std::filesystem::remove(sink_config_path);
+    std::filesystem::remove_all(sink_directory);
 
     logger->setLogLevel(logger::ELogLevel::kDebug);
     logger->setQueueOverflowPolicy(logger::EQueueOverflowPolicy::kDropNewest);

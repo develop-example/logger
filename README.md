@@ -2,10 +2,10 @@
 
 This project is the standalone example used to build the logger incrementally.
 
-## Stage 4
+## Stage 5
 
-Stage 4 adds an asynchronous, dependency-free queue and Worker thread on top
-of the configured logger and public macros:
+Stage 5 adds output Sink abstraction, console/file output, and multi-Sink
+configuration on top of the asynchronous logger:
 
 - C++17 static library target: `logger`
 - public include directory: `include/logger/`
@@ -30,8 +30,16 @@ of the configured logger and public macros:
 - configurable overflow policy and queue statistics
 - `flush()` waits for queued and active records
 - `shutdown()` stops producers, drains the queue, and joins the Worker
+- `ConsoleSink` and `FileSink` behind an internal `ILogSink` interface
+- simultaneous console and file output
+- automatic file parent directory creation
+- append or truncate file mode
+- failed Sink writes are isolated and counted
+- console and file sinks with a shared formatted record
+- file sink directory creation and append/truncate mode
+- sink failures are isolated and counted in `QueueStats::sink_errors`
 
-Once/throttle macros, file output, and third-party backends are intentionally
+Once/throttle macros, file rolling, and third-party backends are intentionally
 left for later stages.
 
 The configuration format is intentionally small:
@@ -40,6 +48,9 @@ The configuration format is intentionally small:
 logger.level=INFO
 logger.Motion.level=DEBUG
 logger.Vision.level=WARN
+logger.sinks=console,file
+logger.file.path=logs/logger.log
+logger.file.append=true
 ```
 
 Use `loadConfig(path)` to load a file explicitly. A failed load leaves the

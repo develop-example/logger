@@ -1,14 +1,14 @@
 #include "logger/logger.h"
 #include "config.h"
+#include "sink.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cstdarg>
 #include <cstdio>
-#include <ctime>
 #include <cstdlib>
 #include <condition_variable>
 #include <deque>
-#include <iomanip>
 #include <iostream>
 #include <mutex>
 #include <sstream>
@@ -26,6 +26,11 @@ class Logger final : public ILogger
 public:
     Logger()
     {
+        std::string sink_error;
+        if (!detail::createSinks(config_.sink_config, sinks_, sink_error))
+        {
+            std::cerr << "logger: failed to create default sinks: " << sink_error << '\n';
+        }
         const char* environment_path = std::getenv("LOGGER_CONFIG_FILE");
         if (environment_path != nullptr && *environment_path != '\0')
         {
@@ -141,6 +146,10 @@ public:
         {
             worker_.join();
         }
+
+        std::lock_guard<std::mutex> output_lock(output_mutex_);
+        flushSinksUnlocked();
+        closeActiveSinksUnlocked();
     }
 
     QueueStats getQueueStats() const noexcept override
@@ -154,6 +163,7 @@ public:
         stats.dropped = dropped_;
         stats.dropped_debug = dropped_debug_;
         stats.dropped_info = dropped_info_;
+        stats.sink_errors = sink_errors_.load(std::memory_order_relaxed);
         return stats;
     }
 
@@ -192,11 +202,24 @@ public:
             return false;
         }
 
+        std::vector<std::unique_ptr<detail::ILogSink>> new_sinks;
+        if (!detail::createSinks(parsed.sink_config, new_sinks, error))
         {
             std::lock_guard<std::mutex> lock(mutex_);
+            std::cerr << "logger: failed to create sinks for config '" << path << "': "
+                      << error << '\n';
+            return false;
+        }
+
+        std::vector<std::unique_ptr<detail::ILogSink>> old_sinks;
+        {
+            std::scoped_lock lock(mutex_, output_mutex_);
             config_ = std::move(parsed);
             config_path_ = path;
+            old_sinks.swap(sinks_);
+            sinks_.swap(new_sinks);
         }
+        closeSinks(old_sinks);
         return true;
     }
 
@@ -215,13 +238,35 @@ public:
     void setOutput(std::ostream& output) noexcept override
     {
         std::lock_guard<std::mutex> lock(output_mutex_);
-        output_ = &output;
+        try
+        {
+            if (custom_output_)
+            {
+                custom_output_->close();
+            }
+            custom_output_ = detail::createStreamSink(output);
+        }
+        catch (...)
+        {
+            sink_errors_.fetch_add(1, std::memory_order_relaxed);
+        }
     }
 
     void resetOutput() noexcept override
     {
         std::lock_guard<std::mutex> lock(output_mutex_);
-        output_ = &std::clog;
+        if (custom_output_)
+        {
+            try
+            {
+                custom_output_->close();
+            }
+            catch (...)
+            {
+                sink_errors_.fetch_add(1, std::memory_order_relaxed);
+            }
+            custom_output_.reset();
+        }
     }
 
     void flush() noexcept override
@@ -231,13 +276,7 @@ public:
         lock.unlock();
 
         std::lock_guard<std::mutex> output_lock(output_mutex_);
-        try
-        {
-            output_->flush();
-        }
-        catch (...)
-        {
-        }
+        flushSinksUnlocked();
     }
 
 private:
@@ -255,30 +294,6 @@ private:
         record.thread_id = std::this_thread::get_id();
         record.message = std::move(message);
         return record;
-    }
-
-    static std::tm localTime(std::time_t time)
-    {
-        std::tm result{};
-#if defined(_WIN32)
-        localtime_s(&result, &time);
-#else
-        localtime_r(&time, &result);
-#endif
-        return result;
-    }
-
-    static void writeTimestamp(std::ostream& output,
-                               std::chrono::system_clock::time_point timestamp)
-    {
-        const auto seconds = std::chrono::time_point_cast<std::chrono::seconds>(timestamp);
-        const auto milliseconds =
-            std::chrono::duration_cast<std::chrono::milliseconds>(timestamp - seconds).count();
-        const std::time_t time = std::chrono::system_clock::to_time_t(timestamp);
-        const std::tm calendar = localTime(time);
-
-        output << std::put_time(&calendar, "%Y-%m-%d %H:%M:%S") << '.'
-               << std::setfill('0') << std::setw(3) << milliseconds << std::setfill(' ');
     }
 
     void enqueue(LogRecord record)
@@ -377,23 +392,87 @@ private:
     void write(const LogRecord& record)
     {
         std::lock_guard<std::mutex> lock(output_mutex_);
+        const std::string line = detail::formatRecord(record);
+        if (custom_output_)
+        {
+            writeToSink(*custom_output_, line);
+            return;
+        }
+        for (const auto& sink : sinks_)
+        {
+            writeToSink(*sink, line);
+        }
+    }
 
-        writeTimestamp(*output_, record.timestamp);
-        *output_ << " [" << toString(record.level) << "]"
-                 << " [tid=" << record.thread_id << "]";
-        if (!record.name.empty())
+    void writeToSink(detail::ILogSink& sink, const std::string& line) noexcept
+    {
+        try
         {
-            *output_ << " [" << record.name << ']';
+            sink.write(line);
         }
-        if (!record.file.empty())
+        catch (...)
         {
-            *output_ << " [" << record.file << ':' << record.line << ']';
+            sink_errors_.fetch_add(1, std::memory_order_relaxed);
         }
-        if (!record.function.empty())
+    }
+
+    void flushSinksUnlocked() noexcept
+    {
+        if (custom_output_)
         {
-            *output_ << " [" << record.function << ']';
+            try
+            {
+                custom_output_->flush();
+            }
+            catch (...)
+            {
+                sink_errors_.fetch_add(1, std::memory_order_relaxed);
+            }
+            return;
         }
-        *output_ << ' ' << record.message << '\n';
+        for (const auto& sink : sinks_)
+        {
+            try
+            {
+                sink->flush();
+            }
+            catch (...)
+            {
+                sink_errors_.fetch_add(1, std::memory_order_relaxed);
+            }
+        }
+    }
+
+    void closeSinks(std::vector<std::unique_ptr<detail::ILogSink>>& sinks) noexcept
+    {
+        for (auto& sink : sinks)
+        {
+            try
+            {
+                sink->close();
+            }
+            catch (...)
+            {
+                sink_errors_.fetch_add(1, std::memory_order_relaxed);
+            }
+        }
+    }
+
+    void closeActiveSinksUnlocked() noexcept
+    {
+        if (custom_output_)
+        {
+            try
+            {
+                custom_output_->close();
+            }
+            catch (...)
+            {
+                sink_errors_.fetch_add(1, std::memory_order_relaxed);
+            }
+            custom_output_.reset();
+        }
+        closeSinks(sinks_);
     }
 
     mutable std::mutex mutex_;
@@ -420,9 +499,11 @@ private:
 
     detail::LoggerConfig config_;
     std::string config_path_;
-    std::ostream* output_{&std::clog};
 
     mutable std::mutex output_mutex_;
+    std::vector<std::unique_ptr<detail::ILogSink>> sinks_;
+    std::unique_ptr<detail::ILogSink> custom_output_;
+    std::atomic<std::uint64_t> sink_errors_{0};
     mutable std::mutex queue_mutex_;
     std::condition_variable queue_condition_;
     std::condition_variable space_condition_;
@@ -469,7 +550,7 @@ const char* toString(ELogLevel level) noexcept
 
 const char* version() noexcept
 {
-    return "0.5.0";
+    return "0.6.0";
 }
 
 }  // namespace logger

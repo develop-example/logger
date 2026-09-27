@@ -4,6 +4,7 @@
 #include <cctype>
 #include <fstream>
 #include <sstream>
+#include <unordered_set>
 
 namespace logger::detail
 {
@@ -27,6 +28,14 @@ std::string uppercase(std::string value)
 {
     std::transform(value.begin(), value.end(), value.begin(), [](unsigned char character) {
         return static_cast<char>(std::toupper(character));
+    });
+    return value;
+}
+
+std::string lowercase(std::string value)
+{
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char character) {
+        return static_cast<char>(std::tolower(character));
     });
     return value;
 }
@@ -81,6 +90,7 @@ bool parseConfigFile(const std::string& path, LoggerConfig& config, std::string&
     }
 
     LoggerConfig parsed;
+    bool sinks_configured = false;
     std::string line;
     std::size_t line_number = 0;
     while (std::getline(input, line))
@@ -110,6 +120,61 @@ bool parseConfigFile(const std::string& path, LoggerConfig& config, std::string&
         {
             setError(error, line_number, "key and value must not be empty");
             return false;
+        }
+
+        if (key == "logger.sinks")
+        {
+            parsed.sink_config.sinks.clear();
+            std::unordered_set<std::string> unique_sinks;
+            std::stringstream sink_list(value);
+            std::string sink;
+            while (std::getline(sink_list, sink, ','))
+            {
+                sink = lowercase(trim(std::move(sink)));
+                if (sink != "console" && sink != "file")
+                {
+                    setError(error, line_number, "unknown sink '" + sink + "'");
+                    return false;
+                }
+                if (!unique_sinks.insert(sink).second)
+                {
+                    setError(error, line_number, "duplicate sink '" + sink + "'");
+                    return false;
+                }
+                parsed.sink_config.sinks.push_back(std::move(sink));
+            }
+            if (parsed.sink_config.sinks.empty())
+            {
+                setError(error, line_number, "at least one sink is required");
+                return false;
+            }
+            sinks_configured = true;
+            continue;
+        }
+
+        if (key == "logger.file.path")
+        {
+            parsed.sink_config.file_path = value;
+            continue;
+        }
+
+        if (key == "logger.file.append")
+        {
+            const std::string normalized = lowercase(value);
+            if (normalized == "true")
+            {
+                parsed.sink_config.file_append = true;
+            }
+            else if (normalized == "false")
+            {
+                parsed.sink_config.file_append = false;
+            }
+            else
+            {
+                setError(error, line_number, "logger.file.append must be true or false");
+                return false;
+            }
+            continue;
         }
 
         std::string module;
@@ -155,6 +220,18 @@ bool parseConfigFile(const std::string& path, LoggerConfig& config, std::string&
     if (input.bad())
     {
         error = "failed while reading file '" + path + "'";
+        return false;
+    }
+
+    if (!sinks_configured)
+    {
+        parsed.sink_config.sinks = {"console"};
+    }
+    if (std::find(parsed.sink_config.sinks.begin(), parsed.sink_config.sinks.end(), "file") !=
+            parsed.sink_config.sinks.end() &&
+        parsed.sink_config.file_path.empty())
+    {
+        error = "logger.file.path is required when the file sink is enabled";
         return false;
     }
 
