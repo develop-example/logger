@@ -1,3 +1,5 @@
+#include <iostream>
+
 #include "logger/logger_motion.h"
 #include "logger/logger_vision.h"
 #include "logger/logger.h"
@@ -25,5 +27,10 @@ int main()
     LOGGER_INFO("this message is filtered");
     LOGGER_ERROR("error messages are still visible");
     log->flush();
+
+    const logger::QueueStats stats = log->getQueueStats();
+    std::cout << "accepted=" << stats.accepted << " dropped=" << stats.dropped
+              << " peak_size=" << stats.peak_size << '\n';
+    log->shutdown();
     return 0;
 }

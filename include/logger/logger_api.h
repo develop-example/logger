@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <iosfwd>
 #include <sstream>
@@ -11,7 +12,7 @@ namespace logger
 {
 
 inline constexpr int kVersionMajor = 0;
-inline constexpr int kVersionMinor = 4;
+inline constexpr int kVersionMinor = 5;
 inline constexpr int kVersionPatch = 0;
 
 enum class ELogLevel : std::uint8_t
@@ -24,6 +25,24 @@ enum class ELogLevel : std::uint8_t
 };
 
 const char* toString(ELogLevel level) noexcept;
+
+enum class EQueueOverflowPolicy : std::uint8_t
+{
+    kBlock = 0,
+    kDropNewest,
+    kDropLowPriority,
+};
+
+struct QueueStats
+{
+    std::size_t capacity{0};
+    std::size_t size{0};
+    std::size_t peak_size{0};
+    std::uint64_t accepted{0};
+    std::uint64_t dropped{0};
+    std::uint64_t dropped_debug{0};
+    std::uint64_t dropped_info{0};
+};
 
 struct LogRecord
 {
@@ -58,6 +77,11 @@ public:
     virtual ELogLevel getLogLevel(const std::string& name) const noexcept = 0;
     virtual bool shouldLog(ELogLevel level) const noexcept = 0;
     virtual bool shouldLog(const char* name, ELogLevel level) const noexcept = 0;
+
+    virtual void shutdown() noexcept = 0;
+    virtual QueueStats getQueueStats() const noexcept = 0;
+    virtual bool setQueueCapacity(std::size_t capacity) noexcept = 0;
+    virtual void setQueueOverflowPolicy(EQueueOverflowPolicy policy) noexcept = 0;
 
     // A failed load leaves the currently active configuration unchanged.
     virtual bool loadConfig(const std::string& path) = 0;

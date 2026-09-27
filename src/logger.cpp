@@ -1,15 +1,19 @@
 #include "logger/logger.h"
 #include "config.h"
 
+#include <algorithm>
 #include <cstdarg>
 #include <cstdio>
 #include <ctime>
+#include <cstdlib>
+#include <condition_variable>
+#include <deque>
 #include <iomanip>
 #include <iostream>
 #include <mutex>
 #include <sstream>
+#include <thread>
 #include <utility>
-#include <cstdlib>
 
 namespace logger
 {
@@ -27,6 +31,12 @@ public:
         {
             loadConfig(environment_path);
         }
+        worker_ = std::thread(&Logger::workerLoop, this);
+    }
+
+    ~Logger() override
+    {
+        shutdown();
     }
 
     void print(ELogLevel level, const char* name, const char* file,
@@ -59,7 +69,7 @@ public:
         va_end(first_args);
 
         buffer.resize(static_cast<std::size_t>(length));
-        write(makeRecord(level, name, file, line, function, std::move(buffer)));
+        enqueue(makeRecord(level, name, file, line, function, std::move(buffer)));
     }
 
     void print(ELogLevel level, const char* name, const char* file,
@@ -71,7 +81,7 @@ public:
             return;
         }
 
-        write(makeRecord(level, name, file, line, function, stream.str()));
+        enqueue(makeRecord(level, name, file, line, function, stream.str()));
     }
 
     void setLogLevel(ELogLevel level) noexcept override
@@ -117,6 +127,60 @@ public:
                static_cast<unsigned>(resolveLevelUnlocked(name != nullptr ? name : ""));
     }
 
+    void shutdown() noexcept override
+    {
+        {
+            std::lock_guard<std::mutex> lock(queue_mutex_);
+            accepting_ = false;
+        }
+        queue_condition_.notify_all();
+        space_condition_.notify_all();
+
+        std::lock_guard<std::mutex> lifecycle_lock(lifecycle_mutex_);
+        if (worker_.joinable() && std::this_thread::get_id() != worker_.get_id())
+        {
+            worker_.join();
+        }
+    }
+
+    QueueStats getQueueStats() const noexcept override
+    {
+        std::lock_guard<std::mutex> lock(queue_mutex_);
+        QueueStats stats;
+        stats.capacity = queue_capacity_;
+        stats.size = queue_.size();
+        stats.peak_size = peak_size_;
+        stats.accepted = accepted_;
+        stats.dropped = dropped_;
+        stats.dropped_debug = dropped_debug_;
+        stats.dropped_info = dropped_info_;
+        return stats;
+    }
+
+    bool setQueueCapacity(std::size_t capacity) noexcept override
+    {
+        if (capacity == 0)
+        {
+            return false;
+        }
+
+        std::lock_guard<std::mutex> lock(queue_mutex_);
+        if (!accepting_ || capacity < queue_.size())
+        {
+            return false;
+        }
+        queue_capacity_ = capacity;
+        space_condition_.notify_all();
+        return true;
+    }
+
+    void setQueueOverflowPolicy(EQueueOverflowPolicy policy) noexcept override
+    {
+        std::lock_guard<std::mutex> lock(queue_mutex_);
+        overflow_policy_ = policy;
+        space_condition_.notify_all();
+    }
+
     bool loadConfig(const std::string& path) override
     {
         detail::LoggerConfig parsed;
@@ -150,20 +214,30 @@ public:
 
     void setOutput(std::ostream& output) noexcept override
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<std::mutex> lock(output_mutex_);
         output_ = &output;
     }
 
     void resetOutput() noexcept override
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<std::mutex> lock(output_mutex_);
         output_ = &std::clog;
     }
 
     void flush() noexcept override
     {
-        std::lock_guard<std::mutex> lock(mutex_);
-        output_->flush();
+        std::unique_lock<std::mutex> lock(queue_mutex_);
+        drain_condition_.wait(lock, [this] { return queue_.empty() && active_count_ == 0; });
+        lock.unlock();
+
+        std::lock_guard<std::mutex> output_lock(output_mutex_);
+        try
+        {
+            output_->flush();
+        }
+        catch (...)
+        {
+        }
     }
 
 private:
@@ -207,17 +281,102 @@ private:
                << std::setfill('0') << std::setw(3) << milliseconds << std::setfill(' ');
     }
 
-    void write(const LogRecord& record)
+    void enqueue(LogRecord record)
     {
-        std::lock_guard<std::mutex> lock(mutex_);
-
-        // Re-check the threshold after formatting in case it changed while
-        // this call was preparing its record.
-        if (static_cast<unsigned>(record.level) <
-            static_cast<unsigned>(resolveLevelUnlocked(record.name)))
+        std::unique_lock<std::mutex> lock(queue_mutex_);
+        if (!accepting_)
         {
+            recordDropUnlocked(record.level);
             return;
         }
+
+        while (queue_.size() >= queue_capacity_)
+        {
+            if (overflow_policy_ == EQueueOverflowPolicy::kDropNewest ||
+                (overflow_policy_ == EQueueOverflowPolicy::kDropLowPriority &&
+                 isLowPriority(record.level)))
+            {
+                recordDropUnlocked(record.level);
+                return;
+            }
+
+            space_condition_.wait(lock, [this] { return !accepting_ || queue_.size() < queue_capacity_; });
+            if (!accepting_)
+            {
+                recordDropUnlocked(record.level);
+                return;
+            }
+        }
+
+        queue_.push_back(std::move(record));
+        ++accepted_;
+        peak_size_ = std::max(peak_size_, queue_.size());
+        lock.unlock();
+        queue_condition_.notify_one();
+    }
+
+    static bool isLowPriority(ELogLevel level) noexcept
+    {
+        return level == ELogLevel::kDebug || level == ELogLevel::kInfo;
+    }
+
+    void recordDropUnlocked(ELogLevel level) noexcept
+    {
+        ++dropped_;
+        if (level == ELogLevel::kDebug)
+        {
+            ++dropped_debug_;
+        }
+        else if (level == ELogLevel::kInfo)
+        {
+            ++dropped_info_;
+        }
+    }
+
+    void workerLoop() noexcept
+    {
+        while (true)
+        {
+            LogRecord record;
+            {
+                std::unique_lock<std::mutex> lock(queue_mutex_);
+                queue_condition_.wait(lock, [this] { return !queue_.empty() || !accepting_; });
+                if (queue_.empty() && !accepting_)
+                {
+                    break;
+                }
+                record = std::move(queue_.front());
+                queue_.pop_front();
+                ++active_count_;
+                space_condition_.notify_one();
+            }
+
+            try
+            {
+                write(record);
+            }
+            catch (...)
+            {
+                // A failing output stream must not terminate the worker.
+            }
+
+            {
+                std::lock_guard<std::mutex> lock(queue_mutex_);
+                --active_count_;
+                if (queue_.empty() && active_count_ == 0)
+                {
+                    drain_condition_.notify_all();
+                }
+            }
+        }
+
+        std::lock_guard<std::mutex> lock(queue_mutex_);
+        drain_condition_.notify_all();
+    }
+
+    void write(const LogRecord& record)
+    {
+        std::lock_guard<std::mutex> lock(output_mutex_);
 
         writeTimestamp(*output_, record.timestamp);
         *output_ << " [" << toString(record.level) << "]"
@@ -262,6 +421,24 @@ private:
     detail::LoggerConfig config_;
     std::string config_path_;
     std::ostream* output_{&std::clog};
+
+    mutable std::mutex output_mutex_;
+    mutable std::mutex queue_mutex_;
+    std::condition_variable queue_condition_;
+    std::condition_variable space_condition_;
+    std::condition_variable drain_condition_;
+    std::deque<LogRecord> queue_;
+    std::size_t queue_capacity_{8192};
+    std::size_t peak_size_{0};
+    std::size_t active_count_{0};
+    std::uint64_t accepted_{0};
+    std::uint64_t dropped_{0};
+    std::uint64_t dropped_debug_{0};
+    std::uint64_t dropped_info_{0};
+    EQueueOverflowPolicy overflow_policy_{EQueueOverflowPolicy::kDropLowPriority};
+    bool accepting_{true};
+    std::thread worker_;
+    std::mutex lifecycle_mutex_;
 };
 
 }  // namespace
@@ -292,7 +469,7 @@ const char* toString(ELogLevel level) noexcept
 
 const char* version() noexcept
 {
-    return "0.4.0";
+    return "0.5.0";
 }
 
 }  // namespace logger

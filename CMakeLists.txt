@@ -1,9 +1,10 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(logger_example VERSION 0.4.0 LANGUAGES CXX)
+project(logger_example VERSION 0.5.0 LANGUAGES CXX)
 
 include(CTest)
 include(GNUInstallDirs)
+find_package(Threads REQUIRED)
 
 option(LOGGER_BUILD_TESTS "Build logger tests" ON)
 
@@ -38,6 +39,7 @@ add_library(logger STATIC
 add_library(logger::logger ALIAS logger)
 
 target_compile_features(logger PUBLIC cxx_std_17)
+target_link_libraries(logger PUBLIC Threads::Threads)
 
 target_include_directories(logger
     PUBLIC
