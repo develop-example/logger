@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -14,6 +15,8 @@ struct SinkConfig
     std::vector<std::string> sinks{"console"};
     std::string file_path;
     bool file_append{true};
+    std::uint64_t file_max_size{0};
+    std::size_t file_max_backups{5};
 };
 
 struct LoggerConfig

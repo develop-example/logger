@@ -54,9 +54,9 @@ class FileSink final : public ILogSink
 {
 public:
     explicit FileSink(const SinkConfig& config)
+        : path_(config.file_path), max_size_(config.file_max_size), max_backups_(config.file_max_backups)
     {
-        const std::filesystem::path path(config.file_path);
-        const auto parent = path.parent_path();
+        const auto parent = path_.parent_path();
         if (!parent.empty())
         {
             std::filesystem::create_directories(parent);
@@ -64,20 +64,32 @@ public:
 
         auto mode = std::ios::out | std::ios::binary;
         mode |= config.file_append ? std::ios::app : std::ios::trunc;
-        output_.open(path, mode);
+        output_.open(path_, mode);
         if (!output_)
         {
             throw std::runtime_error("cannot open file '" + config.file_path + "'");
+        }
+
+        if (config.file_append && std::filesystem::exists(path_))
+        {
+            bytes_written_ = std::filesystem::file_size(path_);
         }
     }
 
     void write(const std::string& line) override
     {
+        const std::uint64_t record_size = static_cast<std::uint64_t>(line.size()) + 1;
+        if (max_size_ != 0 && bytes_written_ != 0 &&
+            (bytes_written_ > max_size_ || record_size > max_size_ - bytes_written_))
+        {
+            roll();
+        }
         output_ << line << '\n';
         if (!output_)
         {
             throw std::runtime_error("file write failed");
         }
+        bytes_written_ += record_size;
     }
 
     void flush() override
@@ -108,7 +120,57 @@ public:
     }
 
 private:
+    void roll()
+    {
+        if (max_backups_ == 0)
+        {
+            throw std::runtime_error("file rolling requires at least one backup");
+        }
+
+        flush();
+        output_.close();
+        if (output_.fail())
+        {
+            throw std::runtime_error("file close failed before rolling");
+        }
+
+        for (std::size_t backup = max_backups_; backup > 1; --backup)
+        {
+            const std::filesystem::path source = path_.string() + "." + std::to_string(backup - 1);
+            const std::filesystem::path target = path_.string() + "." + std::to_string(backup);
+            if (std::filesystem::exists(target))
+            {
+                std::filesystem::remove(target);
+            }
+            if (std::filesystem::exists(source))
+            {
+                std::filesystem::rename(source, target);
+            }
+        }
+
+        const std::filesystem::path first_backup = path_.string() + ".1";
+        if (std::filesystem::exists(first_backup))
+        {
+            std::filesystem::remove(first_backup);
+        }
+        if (std::filesystem::exists(path_))
+        {
+            std::filesystem::rename(path_, first_backup);
+        }
+
+        output_.open(path_, std::ios::out | std::ios::binary | std::ios::trunc);
+        if (!output_)
+        {
+            throw std::runtime_error("cannot reopen file after rolling");
+        }
+        bytes_written_ = 0;
+    }
+
     std::ofstream output_;
+    std::filesystem::path path_;
+    std::uint64_t max_size_{0};
+    std::size_t max_backups_{0};
+    std::uint64_t bytes_written_{0};
 };
 
 std::tm localTime(std::time_t time)

@@ -550,7 +550,7 @@ const char* toString(ELogLevel level) noexcept
 
 const char* version() noexcept
 {
-    return "0.6.0";
+    return "0.7.0";
 }
 
 }  // namespace logger

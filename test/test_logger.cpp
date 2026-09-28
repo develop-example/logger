@@ -57,9 +57,9 @@ protected:
 int main()
 {
     assert(logger::version() != nullptr);
-    assert(std::string(logger::version()) == "0.6.0");
+    assert(std::string(logger::version()) == "0.7.0");
     assert(logger::kVersionMajor == 0);
-    assert(logger::kVersionMinor == 6);
+    assert(logger::kVersionMinor == 7);
     assert(logger::kVersionPatch == 0);
 
     auto* logger = logger::ILogger::getInstance();
@@ -286,6 +286,68 @@ int main()
 
     std::filesystem::remove(sink_config_path);
     std::filesystem::remove_all(sink_directory);
+
+    const std::filesystem::path rolling_directory = "stage6-output";
+    const std::filesystem::path rolling_path = rolling_directory / "rolling.log";
+    const std::string rolling_config_path = "stage6-rolling.properties";
+    std::filesystem::remove_all(rolling_directory);
+    {
+        std::ofstream config(rolling_config_path);
+        assert(config);
+        config << "logger.level=DEBUG\n"
+               << "logger.sinks=file\n"
+               << "logger.file.path=" << rolling_path.string() << "\n"
+               << "logger.file.append=false\n"
+               << "logger.file.max_size=64B\n"
+               << "logger.file.max_backups=2\n";
+    }
+    assert(logger->loadConfig(rolling_config_path));
+    logger->resetOutput();
+    LOGGER_INFO("rolling record one with enough content");
+    LOGGER_INFO("rolling record two with enough content");
+    LOGGER_INFO("rolling record three with enough content");
+    logger->flush();
+    assert(std::filesystem::exists(rolling_path));
+    assert(std::filesystem::exists(rolling_path.string() + ".1"));
+    assert(std::filesystem::exists(rolling_path.string() + ".2"));
+    assert(!std::filesystem::exists(rolling_path.string() + ".3"));
+
+    {
+        std::ofstream config(rolling_config_path);
+        assert(config);
+        config << "logger.level=DEBUG\n"
+               << "logger.sinks=file\n"
+               << "logger.file.path=" << rolling_path.string() << "\n"
+               << "logger.file.append=true\n"
+               << "logger.file.max_size=64\n"
+               << "logger.file.max_backups=2\n";
+    }
+    assert(logger->reloadConfig());
+    LOGGER_WARN("rolling after append reload");
+    logger->flush();
+    assert(std::filesystem::exists(rolling_path.string() + ".1"));
+
+    {
+        std::ofstream invalid(rolling_config_path);
+        assert(invalid);
+        invalid << "logger.sinks=file\n"
+                << "logger.file.path=" << rolling_path.string() << "\n"
+                << "logger.file.max_size=12XB\n";
+    }
+    assert(!logger->reloadConfig());
+    {
+        std::ofstream invalid(rolling_config_path);
+        assert(invalid);
+        invalid << "logger.sinks=file\n"
+                << "logger.file.path=" << rolling_path.string() << "\n"
+                << "logger.file.max_size=64B\n"
+                << "logger.file.max_backups=0\n";
+    }
+    assert(!logger->reloadConfig());
+    assert(logger->getConfigPath() == rolling_config_path);
+
+    std::filesystem::remove(rolling_config_path);
+    std::filesystem::remove_all(rolling_directory);
 
     logger->setLogLevel(logger::ELogLevel::kDebug);
     logger->setQueueOverflowPolicy(logger::EQueueOverflowPolicy::kDropNewest);

@@ -2,7 +2,9 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
 #include <fstream>
+#include <limits>
 #include <sstream>
 #include <unordered_set>
 
@@ -69,6 +71,82 @@ bool parseLevel(const std::string& value, ELogLevel& level)
         return true;
     }
     return false;
+}
+
+bool parseUnsigned(const std::string& value, std::uint64_t& result)
+{
+    const std::string normalized = trim(value);
+    if (normalized.empty())
+    {
+        return false;
+    }
+
+    std::uint64_t parsed = 0;
+    for (const unsigned char character : normalized)
+    {
+        if (!std::isdigit(character))
+        {
+            return false;
+        }
+        const auto digit = static_cast<std::uint64_t>(character - '0');
+        if (parsed > (std::numeric_limits<std::uint64_t>::max() - digit) / 10)
+        {
+            return false;
+        }
+        parsed = parsed * 10 + digit;
+    }
+    result = parsed;
+    return true;
+}
+
+bool parseFileSize(const std::string& value, std::uint64_t& size)
+{
+    const std::string normalized = trim(value);
+    std::size_t number_end = 0;
+    while (number_end < normalized.size() && std::isdigit(static_cast<unsigned char>(normalized[number_end])))
+    {
+        ++number_end;
+    }
+    if (number_end == 0)
+    {
+        return false;
+    }
+
+    std::uint64_t number = 0;
+    if (!parseUnsigned(normalized.substr(0, number_end), number))
+    {
+        return false;
+    }
+
+    const std::string unit = uppercase(trim(normalized.substr(number_end)));
+    std::uint64_t multiplier = 1;
+    if (unit == "" || unit == "B")
+    {
+        multiplier = 1;
+    }
+    else if (unit == "KB")
+    {
+        multiplier = 1024;
+    }
+    else if (unit == "MB")
+    {
+        multiplier = 1024 * 1024;
+    }
+    else if (unit == "GB")
+    {
+        multiplier = 1024 * 1024 * 1024;
+    }
+    else
+    {
+        return false;
+    }
+
+    if (number > std::numeric_limits<std::uint64_t>::max() / multiplier)
+    {
+        return false;
+    }
+    size = number * multiplier;
+    return true;
 }
 
 void setError(std::string& error, std::size_t line, const std::string& reason)
@@ -177,6 +255,30 @@ bool parseConfigFile(const std::string& path, LoggerConfig& config, std::string&
             continue;
         }
 
+        if (key == "logger.file.max_size")
+        {
+            if (!parseFileSize(value, parsed.sink_config.file_max_size))
+            {
+                setError(error, line_number,
+                         "logger.file.max_size must be a non-negative size with B, KB, MB, or GB unit");
+                return false;
+            }
+            continue;
+        }
+
+        if (key == "logger.file.max_backups")
+        {
+            std::uint64_t max_backups = 0;
+            if (!parseUnsigned(value, max_backups) ||
+                max_backups > std::numeric_limits<std::size_t>::max())
+            {
+                setError(error, line_number, "logger.file.max_backups must be a non-negative integer");
+                return false;
+            }
+            parsed.sink_config.file_max_backups = static_cast<std::size_t>(max_backups);
+            continue;
+        }
+
         std::string module;
         if (key == "logger.level")
         {
@@ -232,6 +334,13 @@ bool parseConfigFile(const std::string& path, LoggerConfig& config, std::string&
         parsed.sink_config.file_path.empty())
     {
         error = "logger.file.path is required when the file sink is enabled";
+        return false;
+    }
+    if (std::find(parsed.sink_config.sinks.begin(), parsed.sink_config.sinks.end(), "file") !=
+            parsed.sink_config.sinks.end() &&
+        parsed.sink_config.file_max_size != 0 && parsed.sink_config.file_max_backups == 0)
+    {
+        error = "logger.file.max_backups must be greater than zero when file rolling is enabled";
         return false;
     }
 

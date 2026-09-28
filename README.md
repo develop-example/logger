@@ -2,10 +2,10 @@
 
 This project is the standalone example used to build the logger incrementally.
 
-## Stage 5
+## Stage 6
 
-Stage 5 adds output Sink abstraction, console/file output, and multi-Sink
-configuration on top of the asynchronous logger:
+Stage 6 adds size-based file rolling and backup retention on top of the
+asynchronous console/file Sink logger:
 
 - C++17 static library target: `logger`
 - public include directory: `include/logger/`
@@ -38,9 +38,12 @@ configuration on top of the asynchronous logger:
 - console and file sinks with a shared formatted record
 - file sink directory creation and append/truncate mode
 - sink failures are isolated and counted in `QueueStats::sink_errors`
+- file rolling by size with `B`, `KB`, `MB`, and `GB` units
+- numbered file backups with a configurable retention count
+- a record is never split across files; an oversized first record is kept intact
 
-Once/throttle macros, file rolling, and third-party backends are intentionally
-left for later stages.
+Once/throttle macros, date-based rolling, and third-party backends are
+intentionally left for later stages.
 
 The configuration format is intentionally small:
 
@@ -51,7 +54,13 @@ logger.Vision.level=WARN
 logger.sinks=console,file
 logger.file.path=logs/logger.log
 logger.file.append=true
+logger.file.max_size=10MB
+logger.file.max_backups=5
 ```
+
+Set `logger.file.max_size=0` to disable rolling. When rolling is enabled,
+`logger.file.max_backups` must be greater than zero; `logger.log.1` is the most
+recent backup and older files receive larger suffixes.
 
 Use `loadConfig(path)` to load a file explicitly. A failed load leaves the
 currently active configuration unchanged. `reloadConfig()` reparses the last

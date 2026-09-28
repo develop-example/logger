@@ -12,7 +12,7 @@ namespace logger
 {
 
 inline constexpr int kVersionMajor = 0;
-inline constexpr int kVersionMinor = 6;
+inline constexpr int kVersionMinor = 7;
 inline constexpr int kVersionPatch = 0;
 
 enum class ELogLevel : std::uint8_t
