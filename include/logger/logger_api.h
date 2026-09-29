@@ -7,12 +7,13 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <vector>
 
 namespace logger
 {
 
 inline constexpr int kVersionMajor = 0;
-inline constexpr int kVersionMinor = 7;
+inline constexpr int kVersionMinor = 8;
 inline constexpr int kVersionPatch = 0;
 
 enum class ELogLevel : std::uint8_t
@@ -45,6 +46,14 @@ struct QueueStats
     std::uint64_t sink_errors{0};
 };
 
+struct LogField
+{
+    std::string key;
+    std::string value;
+};
+
+using LogContextSnapshot = std::vector<LogField>;
+
 struct LogRecord
 {
     std::chrono::system_clock::time_point timestamp;
@@ -55,6 +64,7 @@ struct LogRecord
     std::string function;
     std::thread::id thread_id;
     std::string message;
+    LogContextSnapshot context;
 };
 
 class ILogger

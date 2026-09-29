@@ -293,6 +293,7 @@ private:
         record.function = function != nullptr ? function : "";
         record.thread_id = std::this_thread::get_id();
         record.message = std::move(message);
+        record.context = LogContext::snapshot();
         return record;
     }
 
@@ -550,7 +551,7 @@ const char* toString(ELogLevel level) noexcept
 
 const char* version() noexcept
 {
-    return "0.7.0";
+    return "0.8.0";
 }
 
 }  // namespace logger

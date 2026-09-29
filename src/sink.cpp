@@ -15,6 +15,37 @@ namespace logger::detail
 namespace
 {
 
+std::string escapeContextValue(const std::string& value)
+{
+    std::string escaped;
+    escaped.reserve(value.size());
+    for (const char character : value)
+    {
+        switch (character)
+        {
+            case '\\':
+                escaped += "\\\\";
+                break;
+            case '\n':
+                escaped += "\\n";
+                break;
+            case '\r':
+                escaped += "\\r";
+                break;
+            case '\t':
+                escaped += "\\t";
+                break;
+            case ']':
+                escaped += "\\]";
+                break;
+            default:
+                escaped.push_back(character);
+                break;
+        }
+    }
+    return escaped;
+}
+
 class StreamSink : public ILogSink
 {
 public:
@@ -202,6 +233,10 @@ std::string formatRecord(const LogRecord& record)
     if (!record.name.empty())
     {
         output << " [" << record.name << ']';
+    }
+    for (const auto& field : record.context)
+    {
+        output << " [" << field.key << '=' << escapeContextValue(field.value) << ']';
     }
     if (!record.file.empty())
     {

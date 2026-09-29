@@ -1,0 +1,18 @@
+2026-09-29 11:28:21.401 [INFO] [tid=139947063916416] [/home/fwg/Projects/cpp_tmp/logger/example/main.cpp:17] [int main()] general logger macro
+2026-09-29 11:28:21.401 [INFO] [tid=139947063916416] [request_id=example-1001] [component=demo] [/home/fwg/Projects/cpp_tmp/logger/example/main.cpp:20] [int main()] context-aware logger macro
+2026-09-29 11:28:21.401 [WARN] [tid=139947063916416] [Example] [request_id=example-1001] [component=demo] [/home/fwg/Projects/cpp_tmp/logger/example/main.cpp:21] [int main()] named logger macro, value=42
+2026-09-29 11:28:21.401 [INFO] [tid=139947063916416] [request_id=example-1001] [component=demo] [/home/fwg/Projects/cpp_tmp/logger/example/main.cpp:22] [int main()] stream value=3.14
+2026-09-29 11:28:21.401 [INFO] [tid=139947063916416] [Motion] [request_id=example-1001] [component=demo] [/home/fwg/Projects/cpp_tmp/logger/example/main.cpp:23] [int main()] motion module started
+2026-09-29 11:28:21.401 [WARN] [tid=139947063916416] [Motion] [request_id=example-1001] [component=demo] [/home/fwg/Projects/cpp_tmp/logger/example/main.cpp:24] [int main()] target speed=0.5
+2026-09-29 11:28:21.401 [ERROR] [tid=139947063916416] [Vision] [request_id=example-1001] [component=demo] [/home/fwg/Projects/cpp_tmp/logger/example/main.cpp:25] [int main()] camera initialization failed: not connected
+2026-09-29 11:28:21.401 [ERROR] [tid=139947063916416] [Motion] [request_id=example-1001] [component=demo] [/home/fwg/Projects/cpp_tmp/logger/example/main.cpp:29] [int main()] this module error remains visible
+2026-09-29 11:28:21.401 [ERROR] [tid=139947063916416] [request_id=example-1001] [component=demo] [/home/fwg/Projects/cpp_tmp/logger/example/main.cpp:32] [int main()] error messages are still visible
+2026-09-29 11:29:21.886 [INFO] [tid=129999053199232] [/home/fwg/Projects/cpp_tmp/logger/example/main.cpp:17] [int main()] general logger macro
+2026-09-29 11:29:21.886 [INFO] [tid=129999053199232] [request_id=example-1001] [component=demo] [/home/fwg/Projects/cpp_tmp/logger/example/main.cpp:20] [int main()] context-aware logger macro
+2026-09-29 11:29:21.886 [WARN] [tid=129999053199232] [Example] [request_id=example-1001] [component=demo] [/home/fwg/Projects/cpp_tmp/logger/example/main.cpp:21] [int main()] named logger macro, value=42
+2026-09-29 11:29:21.886 [INFO] [tid=129999053199232] [request_id=example-1001] [component=demo] [/home/fwg/Projects/cpp_tmp/logger/example/main.cpp:22] [int main()] stream value=3.14
+2026-09-29 11:29:21.886 [INFO] [tid=129999053199232] [Motion] [request_id=example-1001] [component=demo] [/home/fwg/Projects/cpp_tmp/logger/example/main.cpp:23] [int main()] motion module started
+2026-09-29 11:29:21.886 [WARN] [tid=129999053199232] [Motion] [request_id=example-1001] [component=demo] [/home/fwg/Projects/cpp_tmp/logger/example/main.cpp:24] [int main()] target speed=0.5
+2026-09-29 11:29:21.886 [ERROR] [tid=129999053199232] [Vision] [request_id=example-1001] [component=demo] [/home/fwg/Projects/cpp_tmp/logger/example/main.cpp:25] [int main()] camera initialization failed: not connected
+2026-09-29 11:29:21.886 [ERROR] [tid=129999053199232] [Motion] [request_id=example-1001] [component=demo] [/home/fwg/Projects/cpp_tmp/logger/example/main.cpp:29] [int main()] this module error remains visible
+2026-09-29 11:29:21.886 [ERROR] [tid=129999053199232] [request_id=example-1001] [component=demo] [/home/fwg/Projects/cpp_tmp/logger/example/main.cpp:32] [int main()] error messages are still visible

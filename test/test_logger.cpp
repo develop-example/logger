@@ -12,6 +12,7 @@
 
 #include "logger/logger_motion.h"
 #include "logger/logger.h"
+#include "logger/log_context.h"
 
 namespace
 {
@@ -57,9 +58,9 @@ protected:
 int main()
 {
     assert(logger::version() != nullptr);
-    assert(std::string(logger::version()) == "0.7.0");
+    assert(std::string(logger::version()) == "0.8.0");
     assert(logger::kVersionMajor == 0);
-    assert(logger::kVersionMinor == 7);
+    assert(logger::kVersionMinor == 8);
     assert(logger::kVersionPatch == 0);
 
     auto* logger = logger::ILogger::getInstance();
@@ -111,6 +112,66 @@ int main()
     assert(macro_output.find("error code=17") != std::string::npos);
     assert(macro_output.find("test_logger.cpp:") != std::string::npos);
     assert(macro_output.find("main()") != std::string::npos);
+
+    logger::LogContext::clear();
+    assert(!logger::LogContext::get("request_id").has_value());
+    assert(!logger::LogContext::set("", "invalid"));
+    assert(logger::LogContext::set("request_id", "req-1"));
+    assert(logger::LogContext::set("robot_id", "robot-1"));
+    assert(logger::LogContext::get("request_id").value() == "req-1");
+    assert(logger::LogContext::set("request_id", "req-2"));
+    assert(logger::LogContext::get("request_id").value() == "req-2");
+    assert(logger::LogContext::erase("robot_id"));
+    assert(!logger::LogContext::get("robot_id").has_value());
+    assert(!logger::LogContext::erase("missing"));
+
+    logger::LogContext::set("request_id", "outer");
+    {
+        logger::ScopedLogContext outer{{"request_id", "inner"}, {"task", "navigation"}};
+        assert(logger::LogContext::get("request_id").value() == "inner");
+        assert(logger::LogContext::get("task").value() == "navigation");
+        {
+            logger::ScopedLogContext nested{{"request_id", "nested"}, {"step", "plan"}};
+            assert(logger::LogContext::get("request_id").value() == "nested");
+            assert(logger::LogContext::get("task").value() == "navigation");
+        }
+        assert(logger::LogContext::get("request_id").value() == "inner");
+        assert(logger::LogContext::get("task").value() == "navigation");
+        assert(!logger::LogContext::get("step").has_value());
+    }
+    assert(logger::LogContext::get("request_id").value() == "outer");
+    assert(!logger::LogContext::get("task").has_value());
+
+    const auto context_snapshot = logger::LogContext::snapshot();
+    std::thread context_thread([&context_snapshot] {
+        assert(!logger::LogContext::get("request_id").has_value());
+        assert(logger::LogContext::restore(context_snapshot));
+        assert(logger::LogContext::get("request_id").value() == "outer");
+        logger::LogContext::clear();
+    });
+    context_thread.join();
+    assert(logger::LogContext::get("request_id").value() == "outer");
+
+    output.str("");
+    output.clear();
+    logger->setLogLevel(logger::ELogLevel::kDebug);
+    logger::LogContext::set("request_id", "req\\42\nnext\rline\tpart]value");
+    LOGGER_INFO("context snapshot before mutation");
+    logger::LogContext::set("request_id", "changed-after-enqueue");
+    logger->flush();
+    const std::string context_output = output.str();
+    assert(context_output.find("[request_id=req\\\\42\\nnext\\rline\\tpart\\]value]") !=
+           std::string::npos);
+    assert(context_output.find("changed-after-enqueue") == std::string::npos);
+
+    logger::LogContext::set("filtered", "must-not-be-copied");
+    logger->setLogLevel(logger::ELogLevel::kError);
+    output.str("");
+    output.clear();
+    LOGGER_INFO("filtered context message");
+    logger->flush();
+    assert(output.str().empty());
+    logger::LogContext::clear();
 
     int stream_evaluations = 0;
     logger->setLogLevel(logger::ELogLevel::kInfo);

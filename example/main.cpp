@@ -3,6 +3,7 @@
 #include "logger/logger_motion.h"
 #include "logger/logger_vision.h"
 #include "logger/logger.h"
+#include "logger/log_context.h"
 
 int main()
 {
@@ -14,6 +15,9 @@ int main()
 
     LOGGER_DEBUG("logger example, version %s", logger::version());
     LOGGER_INFO("general logger macro");
+    logger::ScopedLogContext request_context{{"request_id", "example-1001"},
+                                             {"component", "demo"}};
+    LOGGER_INFO("context-aware logger macro");
     LOGGER_WARN_NAMED("Example", "named logger macro, value=%d", 42);
     LOGGER_INFO_STREAM("stream value=" << 3.14);
     MOTION_LOG_INFO("motion module started");

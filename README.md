@@ -2,10 +2,10 @@
 
 This project is the standalone example used to build the logger incrementally.
 
-## Stage 6
+## Stage 7
 
-Stage 6 adds size-based file rolling and backup retention on top of the
-asynchronous console/file Sink logger:
+Stage 7 adds thread-local LogContext/MDC snapshots on top of the asynchronous
+console/file Sink logger:
 
 - C++17 static library target: `logger`
 - public include directory: `include/logger/`
@@ -41,9 +41,13 @@ asynchronous console/file Sink logger:
 - file rolling by size with `B`, `KB`, `MB`, and `GB` units
 - numbered file backups with a configurable retention count
 - a record is never split across files; an oversized first record is kept intact
+- thread-local `LogContext` fields with `set`, `get`, `erase`, `clear`, and `snapshot`
+- nested `ScopedLogContext` with automatic full-snapshot restoration
+- producer-side context capture for asynchronous records
+- escaped context values in all Sink output
 
-Once/throttle macros, date-based rolling, and third-party backends are
-intentionally left for later stages.
+Once/throttle macros, date-based rolling, structured JSON output, and
+third-party backends are intentionally left for later stages.
 
 The configuration format is intentionally small:
 
@@ -61,6 +65,22 @@ logger.file.max_backups=5
 Set `logger.file.max_size=0` to disable rolling. When rolling is enabled,
 `logger.file.max_backups` must be greater than zero; `logger.log.1` is the most
 recent backup and older files receive larger suffixes.
+
+Log context belongs to the calling thread and is copied into a record before
+it enters the asynchronous queue:
+
+```cpp
+logger::ScopedLogContext context{
+    {"request_id", "req-1001"},
+    {"robot_id", "robot-01"}
+};
+LOGGER_INFO("start navigation");
+```
+
+Context fields are printed after the logger name, and values escape backslashes,
+line breaks, tabs, carriage returns, and closing brackets. New threads start
+with an empty context; use `LogContext::snapshot()` and `restore()` for
+explicit propagation.
 
 Use `loadConfig(path)` to load a file explicitly. A failed load leaves the
 currently active configuration unchanged. `reloadConfig()` reparses the last
