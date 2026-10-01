@@ -19,11 +19,25 @@ struct SinkConfig
     std::size_t file_max_backups{5};
 };
 
+enum class ELogFormat
+{
+    kText,
+    kJson,
+};
+
+struct FormatterConfig
+{
+    ELogFormat format{ELogFormat::kText};
+    std::string pattern;
+    bool pattern_configured{false};
+};
+
 struct LoggerConfig
 {
     ELogLevel root_level{ELogLevel::kDebug};
     std::unordered_map<std::string, ELogLevel> module_levels;
     SinkConfig sink_config;
+    FormatterConfig formatter_config;
 };
 
 bool parseConfigFile(const std::string& path, LoggerConfig& config, std::string& error);

@@ -1,5 +1,6 @@
 #include "logger/logger.h"
 #include "config.h"
+#include "formatter.h"
 #include "sink.h"
 
 #include <algorithm>
@@ -26,6 +27,7 @@ class Logger final : public ILogger
 public:
     Logger()
     {
+        formatter_ = detail::createFormatter(config_.formatter_config);
         std::string sink_error;
         if (!detail::createSinks(config_.sink_config, sinks_, sink_error))
         {
@@ -164,6 +166,7 @@ public:
         stats.dropped_debug = dropped_debug_;
         stats.dropped_info = dropped_info_;
         stats.sink_errors = sink_errors_.load(std::memory_order_relaxed);
+        stats.format_errors = format_errors_.load(std::memory_order_relaxed);
         return stats;
     }
 
@@ -202,6 +205,19 @@ public:
             return false;
         }
 
+        std::unique_ptr<detail::ILogFormatter> new_formatter;
+        try
+        {
+            new_formatter = detail::createFormatter(parsed.formatter_config);
+        }
+        catch (const std::exception& exception)
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            std::cerr << "logger: failed to create formatter for config '" << path << "': "
+                      << exception.what() << '\n';
+            return false;
+        }
+
         std::vector<std::unique_ptr<detail::ILogSink>> new_sinks;
         if (!detail::createSinks(parsed.sink_config, new_sinks, error))
         {
@@ -216,6 +232,7 @@ public:
             std::scoped_lock lock(mutex_, output_mutex_);
             config_ = std::move(parsed);
             config_path_ = path;
+            formatter_ = std::move(new_formatter);
             old_sinks.swap(sinks_);
             sinks_.swap(new_sinks);
         }
@@ -393,7 +410,16 @@ private:
     void write(const LogRecord& record)
     {
         std::lock_guard<std::mutex> lock(output_mutex_);
-        const std::string line = detail::formatRecord(record);
+        std::string line;
+        try
+        {
+            line = formatter_->format(record);
+        }
+        catch (...)
+        {
+            format_errors_.fetch_add(1, std::memory_order_relaxed);
+            return;
+        }
         if (custom_output_)
         {
             writeToSink(*custom_output_, line);
@@ -504,7 +530,9 @@ private:
     mutable std::mutex output_mutex_;
     std::vector<std::unique_ptr<detail::ILogSink>> sinks_;
     std::unique_ptr<detail::ILogSink> custom_output_;
+    std::unique_ptr<detail::ILogFormatter> formatter_;
     std::atomic<std::uint64_t> sink_errors_{0};
+    std::atomic<std::uint64_t> format_errors_{0};
     mutable std::mutex queue_mutex_;
     std::condition_variable queue_condition_;
     std::condition_variable space_condition_;
@@ -551,7 +579,7 @@ const char* toString(ELogLevel level) noexcept
 
 const char* version() noexcept
 {
-    return "0.8.0";
+    return "0.9.0";
 }
 
 }  // namespace logger

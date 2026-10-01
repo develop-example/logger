@@ -58,9 +58,9 @@ protected:
 int main()
 {
     assert(logger::version() != nullptr);
-    assert(std::string(logger::version()) == "0.8.0");
+    assert(std::string(logger::version()) == "0.9.0");
     assert(logger::kVersionMajor == 0);
-    assert(logger::kVersionMinor == 8);
+    assert(logger::kVersionMinor == 9);
     assert(logger::kVersionPatch == 0);
 
     auto* logger = logger::ILogger::getInstance();
@@ -409,6 +409,89 @@ int main()
 
     std::filesystem::remove(rolling_config_path);
     std::filesystem::remove_all(rolling_directory);
+
+    const std::string formatter_config_path = "stage8-formatter.properties";
+    {
+        std::ofstream config(formatter_config_path);
+        assert(config);
+        config << "logger.level=DEBUG\n"
+               << "logger.sinks=console\n"
+               << "logger.format=text\n"
+               << "logger.pattern=%datetime|%level|%thread|%name|%context|%file|%line|%function|%%|%message\n";
+    }
+    assert(logger->loadConfig(formatter_config_path));
+    logger->setOutput(output);
+    logger::LogContext::clear();
+    logger::LogContext::set("request_id", "pattern-request");
+    output.str("");
+    output.clear();
+    LOGGER_INFO_NAMED("Formatter", "pattern message");
+    logger->flush();
+    const std::string pattern_output = output.str();
+    assert(pattern_output.find("|INFO|") != std::string::npos);
+    assert(pattern_output.find("|Formatter|") != std::string::npos);
+    assert(pattern_output.find("|[request_id=pattern-request]|" ) != std::string::npos);
+    assert(pattern_output.find("test_logger.cpp|") !=
+           std::string::npos);
+    assert(pattern_output.find("main()|%|pattern message") !=
+           std::string::npos);
+
+    {
+        std::ofstream config(formatter_config_path);
+        assert(config);
+        config << "logger.level=DEBUG\n"
+               << "logger.sinks=console\n"
+               << "logger.format=json\n";
+    }
+    assert(logger->reloadConfig());
+    output.str("");
+    output.clear();
+    logger::LogContext::set("json", "quote\" slash\\ line\n");
+    LOGGER_ERROR_NAMED("Json", "message \"with\" newline\n");
+    logger->flush();
+    const std::string json_output = output.str();
+    assert(json_output.find("{\"timestamp\":") != std::string::npos);
+    assert(json_output.find("\"level\":\"ERROR\"") != std::string::npos);
+    assert(json_output.find("\"logger\":\"Json\"") != std::string::npos);
+    assert(json_output.find("\"context\":{\"request_id\":\"pattern-request\",\"json\":\"quote\\\" slash\\\\ line\\n\"}") !=
+           std::string::npos);
+    assert(json_output.find("\"message\":\"message \\\"with\\\" newline\\n\"") != std::string::npos);
+    assert(!json_output.empty() && json_output.back() == '\n');
+
+    {
+        std::ofstream invalid(formatter_config_path);
+        assert(invalid);
+        invalid << "logger.level=DEBUG\n"
+                << "logger.sinks=console\n"
+                << "logger.format=json\n"
+                << "logger.pattern=%level %message\n";
+    }
+    assert(!logger->reloadConfig());
+    output.str("");
+    output.clear();
+    LOGGER_WARN("json formatter remains active");
+    logger->flush();
+    assert(output.str().find("\"level\":\"WARN\"") != std::string::npos);
+
+    {
+        std::ofstream invalid(formatter_config_path);
+        assert(invalid);
+        invalid << "logger.level=DEBUG\n"
+                << "logger.sinks=console\n"
+                << "logger.format=text\n"
+                << "logger.pattern=%unknown %message\n";
+    }
+    assert(!logger->reloadConfig());
+    output.str("");
+    output.clear();
+    LOGGER_INFO("pattern formatter remains rejected and old JSON remains active");
+    logger->flush();
+    assert(output.str().find("\"level\":\"INFO\"") != std::string::npos);
+    const logger::QueueStats formatter_stats = logger->getQueueStats();
+    assert(formatter_stats.format_errors == 0);
+
+    std::filesystem::remove(formatter_config_path);
+    logger::LogContext::clear();
 
     logger->setLogLevel(logger::ELogLevel::kDebug);
     logger->setQueueOverflowPolicy(logger::EQueueOverflowPolicy::kDropNewest);

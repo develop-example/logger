@@ -1,11 +1,8 @@
 #include "sink.h"
 
-#include <ctime>
 #include <filesystem>
 #include <fstream>
-#include <iomanip>
 #include <iostream>
-#include <sstream>
 #include <stdexcept>
 #include <utility>
 
@@ -14,37 +11,6 @@ namespace logger::detail
 
 namespace
 {
-
-std::string escapeContextValue(const std::string& value)
-{
-    std::string escaped;
-    escaped.reserve(value.size());
-    for (const char character : value)
-    {
-        switch (character)
-        {
-            case '\\':
-                escaped += "\\\\";
-                break;
-            case '\n':
-                escaped += "\\n";
-                break;
-            case '\r':
-                escaped += "\\r";
-                break;
-            case '\t':
-                escaped += "\\t";
-                break;
-            case ']':
-                escaped += "\\]";
-                break;
-            default:
-                escaped.push_back(character);
-                break;
-        }
-    }
-    return escaped;
-}
 
 class StreamSink : public ILogSink
 {
@@ -204,51 +170,7 @@ private:
     std::uint64_t bytes_written_{0};
 };
 
-std::tm localTime(std::time_t time)
-{
-    std::tm result{};
-#if defined(_WIN32)
-    localtime_s(&result, &time);
-#else
-    localtime_r(&time, &result);
-#endif
-    return result;
-}
-
 }  // namespace
-
-std::string formatRecord(const LogRecord& record)
-{
-    std::ostringstream output;
-    const auto seconds = std::chrono::time_point_cast<std::chrono::seconds>(record.timestamp);
-    const auto milliseconds =
-        std::chrono::duration_cast<std::chrono::milliseconds>(record.timestamp - seconds).count();
-    const std::time_t time = std::chrono::system_clock::to_time_t(record.timestamp);
-    const std::tm calendar = localTime(time);
-
-    output << std::put_time(&calendar, "%Y-%m-%d %H:%M:%S") << '.'
-           << std::setfill('0') << std::setw(3) << milliseconds << std::setfill(' ')
-           << " [" << toString(record.level) << "]"
-           << " [tid=" << record.thread_id << "]";
-    if (!record.name.empty())
-    {
-        output << " [" << record.name << ']';
-    }
-    for (const auto& field : record.context)
-    {
-        output << " [" << field.key << '=' << escapeContextValue(field.value) << ']';
-    }
-    if (!record.file.empty())
-    {
-        output << " [" << record.file << ':' << record.line << ']';
-    }
-    if (!record.function.empty())
-    {
-        output << " [" << record.function << ']';
-    }
-    output << ' ' << record.message;
-    return output.str();
-}
 
 bool createSinks(const SinkConfig& config, std::vector<std::unique_ptr<ILogSink>>& sinks,
                  std::string& error)

@@ -2,9 +2,9 @@
 
 This project is the standalone example used to build the logger incrementally.
 
-## Stage 7
+## Stage 8
 
-Stage 7 adds thread-local LogContext/MDC snapshots on top of the asynchronous
+Stage 8 adds configurable text and JSON formatting on top of the asynchronous
 console/file Sink logger:
 
 - C++17 static library target: `logger`
@@ -45,8 +45,12 @@ console/file Sink logger:
 - nested `ScopedLogContext` with automatic full-snapshot restoration
 - producer-side context capture for asynchronous records
 - escaped context values in all Sink output
+- `TextFormatter` with the default layout and configurable patterns
+- `JsonFormatter` with stable fields and JSON escaping
+- formatter and Sink configuration switched together on reload
+- formatter failures counted separately in `QueueStats::format_errors`
 
-Once/throttle macros, date-based rolling, structured JSON output, and
+Once/throttle macros, date-based rolling, custom external formatters, and
 third-party backends are intentionally left for later stages.
 
 The configuration format is intentionally small:
@@ -60,6 +64,7 @@ logger.file.path=logs/logger.log
 logger.file.append=true
 logger.file.max_size=10MB
 logger.file.max_backups=5
+logger.format=text
 ```
 
 Set `logger.file.max_size=0` to disable rolling. When rolling is enabled,
@@ -81,6 +86,12 @@ Context fields are printed after the logger name, and values escape backslashes,
 line breaks, tabs, carriage returns, and closing brackets. New threads start
 with an empty context; use `LogContext::snapshot()` and `restore()` for
 explicit propagation.
+
+Set `logger.format=json` for one-line structured output. Text patterns support
+`%datetime`, `%level`, `%thread`, `%name`, `%context`, `%file`, `%line`,
+`%function`, `%message`, and `%%`. Unknown tokens are rejected during config
+loading. JSON mode always uses its fixed schema and cannot be combined with
+`logger.pattern`.
 
 Use `loadConfig(path)` to load a file explicitly. A failed load leaves the
 currently active configuration unchanged. `reloadConfig()` reparses the last

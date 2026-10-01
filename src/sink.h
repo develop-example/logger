@@ -18,7 +18,6 @@ public:
     virtual void close() = 0;
 };
 
-std::string formatRecord(const LogRecord& record);
 bool createSinks(const SinkConfig& config, std::vector<std::unique_ptr<ILogSink>>& sinks,
                  std::string& error);
 std::unique_ptr<ILogSink> createStreamSink(std::ostream& output);

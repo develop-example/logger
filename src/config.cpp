@@ -279,6 +279,32 @@ bool parseConfigFile(const std::string& path, LoggerConfig& config, std::string&
             continue;
         }
 
+        if (key == "logger.format")
+        {
+            const std::string format = lowercase(value);
+            if (format == "text")
+            {
+                parsed.formatter_config.format = ELogFormat::kText;
+            }
+            else if (format == "json")
+            {
+                parsed.formatter_config.format = ELogFormat::kJson;
+            }
+            else
+            {
+                setError(error, line_number, "logger.format must be text or json");
+                return false;
+            }
+            continue;
+        }
+
+        if (key == "logger.pattern")
+        {
+            parsed.formatter_config.pattern = value;
+            parsed.formatter_config.pattern_configured = true;
+            continue;
+        }
+
         std::string module;
         if (key == "logger.level")
         {
@@ -341,6 +367,12 @@ bool parseConfigFile(const std::string& path, LoggerConfig& config, std::string&
         parsed.sink_config.file_max_size != 0 && parsed.sink_config.file_max_backups == 0)
     {
         error = "logger.file.max_backups must be greater than zero when file rolling is enabled";
+        return false;
+    }
+    if (parsed.formatter_config.format == ELogFormat::kJson &&
+        parsed.formatter_config.pattern_configured)
+    {
+        error = "logger.pattern cannot be used when logger.format=json";
         return false;
     }
 
