@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(logger_example VERSION 0.9.0 LANGUAGES CXX)
+project(logger_example VERSION 0.10.0 LANGUAGES CXX)
 
 include(CTest)
 include(GNUInstallDirs)
@@ -36,6 +36,7 @@ add_library(logger STATIC
     src/formatter.cpp
     src/log_context.cpp
     src/logger.cpp
+    src/rolling_policy.cpp
     src/sink.cpp
 )
 

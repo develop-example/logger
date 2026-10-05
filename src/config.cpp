@@ -279,6 +279,52 @@ bool parseConfigFile(const std::string& path, LoggerConfig& config, std::string&
             continue;
         }
 
+        if (key == "logger.file.roll_policy")
+        {
+            const std::string policy = lowercase(value);
+            if (policy == "none")
+            {
+                parsed.sink_config.file_roll_policy = ERollPolicy::kNone;
+            }
+            else if (policy == "size")
+            {
+                parsed.sink_config.file_roll_policy = ERollPolicy::kSize;
+            }
+            else if (policy == "daily")
+            {
+                parsed.sink_config.file_roll_policy = ERollPolicy::kDaily;
+            }
+            else if (policy == "hourly")
+            {
+                parsed.sink_config.file_roll_policy = ERollPolicy::kHourly;
+            }
+            else if (policy == "size_and_daily")
+            {
+                parsed.sink_config.file_roll_policy = ERollPolicy::kSizeAndDaily;
+            }
+            else
+            {
+                setError(error, line_number,
+                         "logger.file.roll_policy must be none, size, daily, hourly, or size_and_daily");
+                return false;
+            }
+            parsed.sink_config.file_roll_policy_configured = true;
+            continue;
+        }
+
+        if (key == "logger.file.max_age_days")
+        {
+            std::uint64_t max_age_days = 0;
+            if (!parseUnsigned(value, max_age_days) ||
+                max_age_days > std::numeric_limits<std::size_t>::max())
+            {
+                setError(error, line_number, "logger.file.max_age_days must be a non-negative integer");
+                return false;
+            }
+            parsed.sink_config.file_max_age_days = static_cast<std::size_t>(max_age_days);
+            continue;
+        }
+
         if (key == "logger.format")
         {
             const std::string format = lowercase(value);
@@ -355,6 +401,13 @@ bool parseConfigFile(const std::string& path, LoggerConfig& config, std::string&
     {
         parsed.sink_config.sinks = {"console"};
     }
+    const bool file_enabled =
+        std::find(parsed.sink_config.sinks.begin(), parsed.sink_config.sinks.end(), "file") !=
+        parsed.sink_config.sinks.end();
+    if (!parsed.sink_config.file_roll_policy_configured && parsed.sink_config.file_max_size != 0)
+    {
+        parsed.sink_config.file_roll_policy = ERollPolicy::kSize;
+    }
     if (std::find(parsed.sink_config.sinks.begin(), parsed.sink_config.sinks.end(), "file") !=
             parsed.sink_config.sinks.end() &&
         parsed.sink_config.file_path.empty())
@@ -362,9 +415,20 @@ bool parseConfigFile(const std::string& path, LoggerConfig& config, std::string&
         error = "logger.file.path is required when the file sink is enabled";
         return false;
     }
-    if (std::find(parsed.sink_config.sinks.begin(), parsed.sink_config.sinks.end(), "file") !=
-            parsed.sink_config.sinks.end() &&
-        parsed.sink_config.file_max_size != 0 && parsed.sink_config.file_max_backups == 0)
+    if (parsed.sink_config.file_roll_policy != ERollPolicy::kNone && !file_enabled)
+    {
+        error = "a file sink is required when file rolling is enabled";
+        return false;
+    }
+    if ((parsed.sink_config.file_roll_policy == ERollPolicy::kSize ||
+         parsed.sink_config.file_roll_policy == ERollPolicy::kSizeAndDaily) &&
+        parsed.sink_config.file_max_size == 0)
+    {
+        error = "logger.file.max_size must be greater than zero for the selected rolling policy";
+        return false;
+    }
+    if (parsed.sink_config.file_roll_policy != ERollPolicy::kNone &&
+        parsed.sink_config.file_max_backups == 0)
     {
         error = "logger.file.max_backups must be greater than zero when file rolling is enabled";
         return false;

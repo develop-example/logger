@@ -10,6 +10,15 @@
 namespace logger::detail
 {
 
+enum class ERollPolicy
+{
+    kNone,
+    kSize,
+    kDaily,
+    kHourly,
+    kSizeAndDaily,
+};
+
 struct SinkConfig
 {
     std::vector<std::string> sinks{"console"};
@@ -17,6 +26,9 @@ struct SinkConfig
     bool file_append{true};
     std::uint64_t file_max_size{0};
     std::size_t file_max_backups{5};
+    ERollPolicy file_roll_policy{ERollPolicy::kNone};
+    bool file_roll_policy_configured{false};
+    std::size_t file_max_age_days{0};
 };
 
 enum class ELogFormat

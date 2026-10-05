@@ -2,10 +2,10 @@
 
 This project is the standalone example used to build the logger incrementally.
 
-## Stage 8
+## Stage 9
 
-Stage 8 adds configurable text and JSON formatting on top of the asynchronous
-console/file Sink logger:
+Stage 9 adds time-based rolling policies and rolling strategy abstraction on
+top of the asynchronous console/file Sink logger:
 
 - C++17 static library target: `logger`
 - public include directory: `include/logger/`
@@ -49,8 +49,12 @@ console/file Sink logger:
 - `JsonFormatter` with stable fields and JSON escaping
 - formatter and Sink configuration switched together on reload
 - formatter failures counted separately in `QueueStats::format_errors`
+- `none`, `size`, `daily`, `hourly`, and `size_and_daily` rolling policies
+- time-period backup names and restart-aware append rolling
+- backup count and optional age-based cleanup
+- rolling failures counted separately in `QueueStats::rolling_errors`
 
-Once/throttle macros, date-based rolling, custom external formatters, and
+Once/throttle macros, weekly/monthly rolling, custom external formatters, and
 third-party backends are intentionally left for later stages.
 
 The configuration format is intentionally small:
@@ -65,11 +69,19 @@ logger.file.append=true
 logger.file.max_size=10MB
 logger.file.max_backups=5
 logger.format=text
+logger.file.roll_policy=size
 ```
 
 Set `logger.file.max_size=0` to disable rolling. When rolling is enabled,
 `logger.file.max_backups` must be greater than zero; `logger.log.1` is the most
 recent backup and older files receive larger suffixes.
+
+Time-based policies use local time. Daily and hourly backups use names such as
+`logger.log.2026-10-04` and `logger.log.2026-10-04-14`; size backups continue to
+use numeric suffixes. `logger.file.max_age_days=0` disables age cleanup.
+For compatibility with the previous size-only configuration, specifying a
+non-zero `logger.file.max_size` without `logger.file.roll_policy` selects the
+`size` policy.
 
 Log context belongs to the calling thread and is copied into a record before
 it enters the asynchronous queue:

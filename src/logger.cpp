@@ -1,6 +1,7 @@
 #include "logger/logger.h"
 #include "config.h"
 #include "formatter.h"
+#include "rolling_policy.h"
 #include "sink.h"
 
 #include <algorithm>
@@ -167,6 +168,7 @@ public:
         stats.dropped_info = dropped_info_;
         stats.sink_errors = sink_errors_.load(std::memory_order_relaxed);
         stats.format_errors = format_errors_.load(std::memory_order_relaxed);
+        stats.rolling_errors = rolling_errors_.load(std::memory_order_relaxed);
         return stats;
     }
 
@@ -437,6 +439,10 @@ private:
         {
             sink.write(line);
         }
+        catch (const detail::RollingError&)
+        {
+            rolling_errors_.fetch_add(1, std::memory_order_relaxed);
+        }
         catch (...)
         {
             sink_errors_.fetch_add(1, std::memory_order_relaxed);
@@ -533,6 +539,7 @@ private:
     std::unique_ptr<detail::ILogFormatter> formatter_;
     std::atomic<std::uint64_t> sink_errors_{0};
     std::atomic<std::uint64_t> format_errors_{0};
+    std::atomic<std::uint64_t> rolling_errors_{0};
     mutable std::mutex queue_mutex_;
     std::condition_variable queue_condition_;
     std::condition_variable space_condition_;
@@ -579,7 +586,7 @@ const char* toString(ELogLevel level) noexcept
 
 const char* version() noexcept
 {
-    return "0.9.0";
+    return "0.10.0";
 }
 
 }  // namespace logger

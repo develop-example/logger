@@ -58,9 +58,9 @@ protected:
 int main()
 {
     assert(logger::version() != nullptr);
-    assert(std::string(logger::version()) == "0.9.0");
+    assert(std::string(logger::version()) == "0.10.0");
     assert(logger::kVersionMajor == 0);
-    assert(logger::kVersionMinor == 9);
+    assert(logger::kVersionMinor == 10);
     assert(logger::kVersionPatch == 0);
 
     auto* logger = logger::ILogger::getInstance();
@@ -409,6 +409,131 @@ int main()
 
     std::filesystem::remove(rolling_config_path);
     std::filesystem::remove_all(rolling_directory);
+
+    const std::filesystem::path stage9_directory = "stage9-output";
+    const std::filesystem::path daily_path = stage9_directory / "daily.log";
+    const std::filesystem::path hourly_path = stage9_directory / "hourly.log";
+    const std::filesystem::path combined_path = stage9_directory / "combined.log";
+    const std::string stage9_config_path = "stage9-rolling.properties";
+    std::filesystem::remove_all(stage9_directory);
+    std::filesystem::create_directories(stage9_directory);
+
+    {
+        std::ofstream daily_file(daily_path);
+        assert(daily_file);
+        daily_file << "old daily record\n";
+    }
+    {
+        const auto old_time = std::filesystem::file_time_type::clock::now() - std::chrono::hours(48);
+        std::filesystem::last_write_time(daily_path, old_time);
+    }
+    {
+        std::ofstream config(stage9_config_path);
+        assert(config);
+        config << "logger.level=DEBUG\n"
+               << "logger.sinks=file\n"
+               << "logger.file.path=" << daily_path.string() << "\n"
+               << "logger.file.append=true\n"
+               << "logger.file.roll_policy=daily\n"
+               << "logger.file.max_backups=3\n"
+               << "logger.file.max_age_days=7\n";
+    }
+    assert(logger->loadConfig(stage9_config_path));
+    logger->resetOutput();
+    LOGGER_INFO("new daily record");
+    logger->flush();
+    assert(std::filesystem::exists(daily_path));
+    bool daily_backup_found = false;
+    for (const auto& entry : std::filesystem::directory_iterator(stage9_directory))
+    {
+        if (entry.path().filename().string().rfind("daily.log.", 0) == 0)
+        {
+            daily_backup_found = true;
+            std::ifstream backup(entry.path());
+            const std::string contents((std::istreambuf_iterator<char>(backup)),
+                                       std::istreambuf_iterator<char>());
+            assert(contents.find("old daily record") != std::string::npos);
+        }
+    }
+    assert(daily_backup_found);
+
+    {
+        std::ofstream hourly_file(hourly_path);
+        assert(hourly_file);
+        hourly_file << "old hourly record\n";
+    }
+    {
+        const auto old_time = std::filesystem::file_time_type::clock::now() - std::chrono::hours(3);
+        std::filesystem::last_write_time(hourly_path, old_time);
+    }
+    {
+        std::ofstream config(stage9_config_path);
+        assert(config);
+        config << "logger.level=DEBUG\n"
+               << "logger.sinks=file\n"
+               << "logger.file.path=" << hourly_path.string() << "\n"
+               << "logger.file.append=true\n"
+               << "logger.file.roll_policy=hourly\n"
+               << "logger.file.max_backups=2\n";
+    }
+    assert(logger->reloadConfig());
+    LOGGER_INFO("new hourly record");
+    logger->flush();
+    bool hourly_backup_found = false;
+    for (const auto& entry : std::filesystem::directory_iterator(stage9_directory))
+    {
+        if (entry.path().filename().string().rfind("hourly.log.", 0) == 0)
+        {
+            hourly_backup_found = true;
+        }
+    }
+    assert(hourly_backup_found);
+
+    {
+        std::ofstream config(stage9_config_path);
+        assert(config);
+        config << "logger.level=DEBUG\n"
+               << "logger.sinks=file\n"
+               << "logger.file.path=" << combined_path.string() << "\n"
+               << "logger.file.append=false\n"
+               << "logger.file.roll_policy=size_and_daily\n"
+               << "logger.file.max_size=48B\n"
+               << "logger.file.max_backups=2\n";
+    }
+    assert(logger->reloadConfig());
+    LOGGER_INFO("combined rolling record one");
+    LOGGER_INFO("combined rolling record two");
+    logger->flush();
+    bool combined_backup_found = false;
+    for (const auto& entry : std::filesystem::directory_iterator(stage9_directory))
+    {
+        if (entry.path().filename().string().rfind("combined.log.", 0) == 0)
+        {
+            combined_backup_found = true;
+        }
+    }
+    assert(combined_backup_found);
+
+    {
+        std::ofstream invalid(stage9_config_path);
+        assert(invalid);
+        invalid << "logger.sinks=file\n"
+                << "logger.file.path=" << combined_path.string() << "\n"
+                << "logger.file.roll_policy=daily\n"
+                << "logger.file.max_backups=0\n";
+    }
+    assert(!logger->reloadConfig());
+    {
+        std::ofstream invalid(stage9_config_path);
+        assert(invalid);
+        invalid << "logger.sinks=file\n"
+                << "logger.file.path=" << combined_path.string() << "\n"
+                << "logger.file.roll_policy=unknown\n";
+    }
+    assert(!logger->reloadConfig());
+
+    std::filesystem::remove(stage9_config_path);
+    std::filesystem::remove_all(stage9_directory);
 
     const std::string formatter_config_path = "stage8-formatter.properties";
     {
