@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(logger_example VERSION 0.10.0 LANGUAGES CXX)
+project(logger_example VERSION 0.11.0 LANGUAGES CXX)
 
 include(CTest)
 include(GNUInstallDirs)

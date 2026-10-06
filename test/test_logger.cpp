@@ -58,9 +58,9 @@ protected:
 int main()
 {
     assert(logger::version() != nullptr);
-    assert(std::string(logger::version()) == "0.10.0");
+    assert(std::string(logger::version()) == "0.11.0");
     assert(logger::kVersionMajor == 0);
-    assert(logger::kVersionMinor == 10);
+    assert(logger::kVersionMinor == 11);
     assert(logger::kVersionPatch == 0);
 
     auto* logger = logger::ILogger::getInstance();
@@ -617,6 +617,117 @@ int main()
 
     std::filesystem::remove(formatter_config_path);
     logger::LogContext::clear();
+
+    logger->setLogLevel(logger::ELogLevel::kInfo);
+    output.str("");
+    output.clear();
+    int once_arguments = 0;
+    for (int index = 0; index < 2; ++index)
+    {
+        LOGGER_INFO_ONCE("once=%d", ++once_arguments);
+    }
+    for (int index = 0; index < 2; ++index)
+    {
+        LOGGER_INFO_STREAM_ONCE("stream-once=" << ++once_arguments);
+    }
+    for (int index = 0; index < 2; ++index)
+    {
+        MOTION_LOG_WARN_ONCE("module-once");
+    }
+    logger->flush();
+    const std::string once_output = output.str();
+    assert(once_arguments == 2);
+    assert(once_output.find("once=1") != std::string::npos);
+    assert(once_output.find("stream-once=2") != std::string::npos);
+    assert(once_output.find("module-once") != std::string::npos);
+    assert(once_output.find("module-once", once_output.find("module-once") + 1) ==
+           std::string::npos);
+
+    output.str("");
+    output.clear();
+    int every_arguments = 0;
+    for (int index = 0; index < 5; ++index)
+    {
+        LOGGER_INFO_EVERY_N(3, "every=%d", ++every_arguments);
+    }
+    logger->flush();
+    const std::string every_output = output.str();
+    assert(every_arguments == 2);
+    assert(every_output.find("every=1") != std::string::npos);
+    assert(every_output.find("every=2") != std::string::npos);
+    assert(every_output.find("every=3") == std::string::npos);
+    assert(every_output.find("every=4") == std::string::npos);
+    assert(every_output.find("every=5") == std::string::npos);
+
+    output.str("");
+    output.clear();
+    int zero_arguments = 0;
+    LOGGER_INFO_EVERY_N(0, "zero=%d", ++zero_arguments);
+    LOGGER_INFO_STREAM_EVERY_N(0, "zero-stream=" << ++zero_arguments);
+    assert(zero_arguments == 0);
+    logger->flush();
+    assert(output.str().empty());
+
+    output.str("");
+    output.clear();
+    int throttle_arguments = 0;
+    for (int index = 0; index < 2; ++index)
+    {
+        LOGGER_WARN_THROTTLE(std::chrono::hours(1), "throttle=%d", ++throttle_arguments);
+    }
+    for (int index = 0; index < 2; ++index)
+    {
+        LOGGER_WARN_STREAM_THROTTLE(std::chrono::hours(1),
+                                    "throttle-stream=" << ++throttle_arguments);
+    }
+    logger->flush();
+    const std::string throttle_output = output.str();
+    assert(throttle_arguments == 2);
+    assert(throttle_output.find("throttle=1") != std::string::npos);
+    assert(throttle_output.find("throttle-stream=2") != std::string::npos);
+    assert(throttle_output.find("throttle=2") == std::string::npos);
+
+    logger->setLogLevel(logger::ELogLevel::kError);
+    int filtered_once_arguments = 0;
+    for (int index = 0; index < 2; ++index)
+    {
+        if (index == 1)
+        {
+            logger->setLogLevel(logger::ELogLevel::kInfo);
+        }
+        LOGGER_INFO_ONCE("filtered-once=%d", ++filtered_once_arguments);
+    }
+    output.str("");
+    output.clear();
+    LOGGER_INFO_ONCE("filtered-once=%d", ++filtered_once_arguments);
+    logger->flush();
+    assert(filtered_once_arguments == 2);
+    assert(output.str().find("filtered-once=2") != std::string::npos);
+
+    output.str("");
+    output.clear();
+    constexpr int kRateThreadCount = 4;
+    std::vector<std::thread> rate_threads;
+    for (int index = 0; index < kRateThreadCount; ++index)
+    {
+        rate_threads.emplace_back([logger] {
+            for (int attempt = 0; attempt < 10; ++attempt)
+            {
+                LOGGER_ERROR_EVERY_N(10, "concurrent-every");
+            }
+        });
+    }
+    for (auto& worker : rate_threads) worker.join();
+    logger->flush();
+    const std::string concurrent_output = output.str();
+    std::size_t concurrent_count = 0;
+    for (std::size_t position = concurrent_output.find("concurrent-every");
+         position != std::string::npos;
+         position = concurrent_output.find("concurrent-every", position + 1))
+    {
+        ++concurrent_count;
+    }
+    assert(concurrent_count == 4);
 
     logger->setLogLevel(logger::ELogLevel::kDebug);
     logger->setQueueOverflowPolicy(logger::EQueueOverflowPolicy::kDropNewest);

@@ -2,10 +2,10 @@
 
 This project is the standalone example used to build the logger incrementally.
 
-## Stage 9
+## Stage 10
 
-Stage 9 adds time-based rolling policies and rolling strategy abstraction on
-top of the asynchronous console/file Sink logger:
+Stage 10 adds thread-safe rate-limited logging macros on top of the asynchronous
+console/file Sink logger:
 
 - C++17 static library target: `logger`
 - public include directory: `include/logger/`
@@ -53,8 +53,12 @@ top of the asynchronous console/file Sink logger:
 - time-period backup names and restart-aware append rolling
 - backup count and optional age-based cleanup
 - rolling failures counted separately in `QueueStats::rolling_errors`
+- `ONCE`, `EVERY_N`, and `THROTTLE` printf-style macros
+- matching stream and generated module macros
+- call-site-local atomic state without a global registry
+- filtered or suppressed logs do not evaluate their arguments
 
-Once/throttle macros, weekly/monthly rolling, custom external formatters, and
+Dynamic rate-limit configuration, weekly/monthly rolling, custom external formatters, and
 third-party backends are intentionally left for later stages.
 
 The configuration format is intentionally small:
@@ -71,6 +75,19 @@ logger.file.max_backups=5
 logger.format=text
 logger.file.roll_policy=size
 ```
+
+Rate-limited macros use call-site state:
+
+```cpp
+LOGGER_INFO_ONCE("initialized");
+LOGGER_WARN_EVERY_N(100, "retry=%d", retry_count);
+LOGGER_ERROR_THROTTLE(std::chrono::seconds(5), "connection failed");
+```
+
+`EVERY_N` emits on the first call and then every Nth allowed call. A zero
+interval suppresses every call. `THROTTLE` uses `steady_clock`; non-positive
+durations allow every call. Different source locations have independent state,
+while concurrent threads share the state of the same call site.
 
 Set `logger.file.max_size=0` to disable rolling. When rolling is enabled,
 `logger.file.max_backups` must be greater than zero; `logger.log.1` is the most

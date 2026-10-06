@@ -8,6 +8,34 @@
 #define @module_prefix@_LOG_ERROR(...) LOGGER_ERROR_NAMED("@module_name@", __VA_ARGS__)
 #define @module_prefix@_LOG_FATAL(...) LOGGER_FATAL_NAMED("@module_name@", __VA_ARGS__)
 
+#define @module_prefix@_LOG_DEBUG_ONCE(...) LOGGER_DEBUG_NAMED_ONCE("@module_name@", __VA_ARGS__)
+#define @module_prefix@_LOG_INFO_ONCE(...) LOGGER_INFO_NAMED_ONCE("@module_name@", __VA_ARGS__)
+#define @module_prefix@_LOG_WARN_ONCE(...) LOGGER_WARN_NAMED_ONCE("@module_name@", __VA_ARGS__)
+#define @module_prefix@_LOG_ERROR_ONCE(...) LOGGER_ERROR_NAMED_ONCE("@module_name@", __VA_ARGS__)
+#define @module_prefix@_LOG_FATAL_ONCE(...) LOGGER_FATAL_NAMED_ONCE("@module_name@", __VA_ARGS__)
+
+#define @module_prefix@_LOG_DEBUG_EVERY_N(interval, ...) \
+    LOGGER_DEBUG_NAMED_EVERY_N("@module_name@", interval, __VA_ARGS__)
+#define @module_prefix@_LOG_INFO_EVERY_N(interval, ...) \
+    LOGGER_INFO_NAMED_EVERY_N("@module_name@", interval, __VA_ARGS__)
+#define @module_prefix@_LOG_WARN_EVERY_N(interval, ...) \
+    LOGGER_WARN_NAMED_EVERY_N("@module_name@", interval, __VA_ARGS__)
+#define @module_prefix@_LOG_ERROR_EVERY_N(interval, ...) \
+    LOGGER_ERROR_NAMED_EVERY_N("@module_name@", interval, __VA_ARGS__)
+#define @module_prefix@_LOG_FATAL_EVERY_N(interval, ...) \
+    LOGGER_FATAL_NAMED_EVERY_N("@module_name@", interval, __VA_ARGS__)
+
+#define @module_prefix@_LOG_DEBUG_THROTTLE(interval, ...) \
+    LOGGER_DEBUG_NAMED_THROTTLE("@module_name@", interval, __VA_ARGS__)
+#define @module_prefix@_LOG_INFO_THROTTLE(interval, ...) \
+    LOGGER_INFO_NAMED_THROTTLE("@module_name@", interval, __VA_ARGS__)
+#define @module_prefix@_LOG_WARN_THROTTLE(interval, ...) \
+    LOGGER_WARN_NAMED_THROTTLE("@module_name@", interval, __VA_ARGS__)
+#define @module_prefix@_LOG_ERROR_THROTTLE(interval, ...) \
+    LOGGER_ERROR_NAMED_THROTTLE("@module_name@", interval, __VA_ARGS__)
+#define @module_prefix@_LOG_FATAL_THROTTLE(interval, ...) \
+    LOGGER_FATAL_NAMED_THROTTLE("@module_name@", interval, __VA_ARGS__)
+
 #define @module_prefix@_LOG_DEBUG_STREAM(expression) \
     LOGGER_DEBUG_STREAM_NAMED("@module_name@", expression)
 #define @module_prefix@_LOG_INFO_STREAM(expression) \
@@ -18,3 +46,36 @@
     LOGGER_ERROR_STREAM_NAMED("@module_name@", expression)
 #define @module_prefix@_LOG_FATAL_STREAM(expression) \
     LOGGER_FATAL_STREAM_NAMED("@module_name@", expression)
+
+#define @module_prefix@_LOG_DEBUG_STREAM_ONCE(expression) \
+    LOGGER_DEBUG_STREAM_ONCE_NAMED("@module_name@", expression)
+#define @module_prefix@_LOG_INFO_STREAM_ONCE(expression) \
+    LOGGER_INFO_STREAM_ONCE_NAMED("@module_name@", expression)
+#define @module_prefix@_LOG_WARN_STREAM_ONCE(expression) \
+    LOGGER_WARN_STREAM_ONCE_NAMED("@module_name@", expression)
+#define @module_prefix@_LOG_ERROR_STREAM_ONCE(expression) \
+    LOGGER_ERROR_STREAM_ONCE_NAMED("@module_name@", expression)
+#define @module_prefix@_LOG_FATAL_STREAM_ONCE(expression) \
+    LOGGER_FATAL_STREAM_ONCE_NAMED("@module_name@", expression)
+
+#define @module_prefix@_LOG_DEBUG_STREAM_EVERY_N(interval, expression) \
+    LOGGER_DEBUG_STREAM_EVERY_N_NAMED("@module_name@", interval, expression)
+#define @module_prefix@_LOG_INFO_STREAM_EVERY_N(interval, expression) \
+    LOGGER_INFO_STREAM_EVERY_N_NAMED("@module_name@", interval, expression)
+#define @module_prefix@_LOG_WARN_STREAM_EVERY_N(interval, expression) \
+    LOGGER_WARN_STREAM_EVERY_N_NAMED("@module_name@", interval, expression)
+#define @module_prefix@_LOG_ERROR_STREAM_EVERY_N(interval, expression) \
+    LOGGER_ERROR_STREAM_EVERY_N_NAMED("@module_name@", interval, expression)
+#define @module_prefix@_LOG_FATAL_STREAM_EVERY_N(interval, expression) \
+    LOGGER_FATAL_STREAM_EVERY_N_NAMED("@module_name@", interval, expression)
+
+#define @module_prefix@_LOG_DEBUG_STREAM_THROTTLE(interval, expression) \
+    LOGGER_DEBUG_STREAM_THROTTLE_NAMED("@module_name@", interval, expression)
+#define @module_prefix@_LOG_INFO_STREAM_THROTTLE(interval, expression) \
+    LOGGER_INFO_STREAM_THROTTLE_NAMED("@module_name@", interval, expression)
+#define @module_prefix@_LOG_WARN_STREAM_THROTTLE(interval, expression) \
+    LOGGER_WARN_STREAM_THROTTLE_NAMED("@module_name@", interval, expression)
+#define @module_prefix@_LOG_ERROR_STREAM_THROTTLE(interval, expression) \
+    LOGGER_ERROR_STREAM_THROTTLE_NAMED("@module_name@", interval, expression)
+#define @module_prefix@_LOG_FATAL_STREAM_THROTTLE(interval, expression) \
+    LOGGER_FATAL_STREAM_THROTTLE_NAMED("@module_name@", interval, expression)
